@@ -1,0 +1,10 @@
+/* styles/Layout.module.css */
+.layout {
+    display: flex;
+  }
+  
+  .mainContent {
+    margin-left: 220px; /* To make room for the sidebar */
+    padding: 20px;
+    width: 100%;
+  }

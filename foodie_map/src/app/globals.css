@@ -14,9 +14,9 @@
 /* Dark mode styles */
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #e6e6e6;
+    --background: #dadada;
     --foreground: #000000;
-    --input-background: rgba(255, 255, 255, 0);
+    --input-background: #e4e4e4;
     --input-border: #4a5568;
     --button-bg: #434190;
     --button-hover-bg: #2c3e8f;

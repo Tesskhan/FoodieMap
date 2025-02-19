@@ -8,18 +8,18 @@ export default function Sidebar() {
       <h2>Navigation</h2>
       <ul>
         <li>
-          <Link href="/edit_reviewers">
-            <a>Edit Reviewers</a>
+          <Link href="/edit_reviewers" className={styles.primary}>
+            Edit Reviewers
           </Link>
         </li>
         <li>
-          <Link href="/edit_videos">
-            <a>Edit Videos</a>
+          <Link href="/edit_videos" className={styles.primary}>
+            Edit Videos
           </Link>
         </li>
         <li>
-          <Link href="/edit_restaurants">
-            <a>Edit Restaurants</a>
+          <Link href="/edit_restaurants" className={styles.primary}>
+            Edit Restaurants
           </Link>
         </li>
       </ul>

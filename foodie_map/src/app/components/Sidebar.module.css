@@ -1,37 +1,55 @@
 /* styles/Sidebar.module.css */
 .sidebar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 200px;
-    height: 100%;
-    background-color: #333;
-    color: white;
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-  }
-  
-  .sidebar h2 {
-    color: #fff;
-    margin-bottom: 20px;
-  }
-  
-  .sidebar ul {
-    list-style-type: none;
-    padding: 0;
-  }
-  
-  .sidebar li {
-    margin: 10px 0;
-  }
-  
-  .sidebar a {
-    color: white;
-    text-decoration: none;
-    font-size: 16px;
-  }
-  
-  .sidebar a:hover {
-    text-decoration: underline;
-  }
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 200px; /* Sidebar width */
+  height: 100%;
+  background-color: #2d2d2d; /* Darker background */
+  color: white;
+  padding: 30px 20px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -10px 0 15px rgba(0, 0, 0, 0.2); /* Creates shadow effect on the left */
+  border-radius: 0 30px 30px 0; /* Rounded corners only on the left side */
+  z-index: 1000; /* Ensure the sidebar stays on top of other elements */
+}
+
+.sidebar h2 {
+  color: #fff;
+  font-size: 24px;
+  margin-bottom: 30px;
+  text-align: center; /* Center the title */
+  font-family: 'Arial', sans-serif;
+  font-weight: 600;
+}
+
+.sidebar ul {
+  list-style-type: none;
+  padding: 0;
+}
+
+.sidebar li {
+  margin: 15px 0;
+  transition: transform 0.3s ease, background-color 0.3s ease; /* Smooth hover effects */
+}
+
+.sidebar li:hover {
+  transform: translateX(5px); /* Slight animation effect */
+  background-color: #444; /* Hover background color */
+  border-radius: 5px; /* Rounded corners on hover */
+}
+
+.sidebar a {
+  color: white;
+  text-decoration: none;
+  font-size: 18px;
+  font-weight: 500;
+  display: block; /* Make the links fill the width */
+  transition: color 0.3s ease;
+}
+
+.sidebar a:hover {
+  color: #5083fa; /* Neon blue hover effect */
+  text-decoration: underline;
+}

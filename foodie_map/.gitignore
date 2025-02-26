@@ -41,4 +41,4 @@ yarn-error.log*
 next-env.d.ts
 
 # something
-foodie_map/src/app/components/utils/API_KEY.js
+FoodieMap/foodie_map/src/app/components/utils/.API_KEY

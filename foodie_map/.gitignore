@@ -41,4 +41,4 @@ yarn-error.log*
 next-env.d.ts
 
 # something
-FoodieMap/foodie_map/src/app/utils/.youtube_api_key
+/foodie_map/src/app/utils/.youtube_api_key

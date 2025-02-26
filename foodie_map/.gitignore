@@ -40,8 +40,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# api keys
-/Utils
-
-# api key
-/API_KEY.js
+# something
+foodie_map/src/app/components/utils/API_KEY.js

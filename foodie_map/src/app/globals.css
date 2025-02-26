@@ -49,6 +49,37 @@ h1 {
 }
 
 /* Reviewer Card Styles */
+.pagination {
+  display: flex;
+  list-style: none;
+  padding: 0;
+  justify-content: center;
+}
+
+.pagination li {
+  margin: 0 4px;
+}
+
+.pagination a {
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background-color: var(--button-bg);
+  color: white;
+  text-decoration: none;
+}
+
+.pagination .active a {
+  background-color: var(--button-hover-bg);
+}
+
+
+.card-container {
+  width: 50%;
+  margin: 0 auto;
+  justify-content: center;
+}
+
 .reviewer-card {
   background: var(--input-background);
   border: 1px solid var(--input-border);
@@ -63,7 +94,7 @@ h1 {
 
 .reviewer-card:hover {
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-  transform: scale(1.02);
+  transform: scale(1.01);
 }
 
 .reviewer-card img {

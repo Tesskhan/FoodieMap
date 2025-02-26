@@ -1,98 +1,115 @@
 "use client";
 import Layout from "../components/Layout";
+import ReactPaginate from "react-paginate";
 import { useState, useEffect } from "react";
 import { db } from "../firebase"; // Import Firebase config
 import { collection, getDocs, doc, setDoc, deleteDoc } from "firebase/firestore"; // Firestore methods
 import "../globals.css";
 
 export default function EditReviewers() {
-  const [reviewers, setReviewers] = useState([]); // Array to store all reviewers
-  const [selectedReviewer, setSelectedReviewer] = useState(null); // Selected reviewer for editing
-  const [channelName, setChannelName] = useState("");
-  const [channelId, setChannelId] = useState("");
-  const [lastVideoChecked, setLastVideoChecked] = useState("");
-  const [avatarUrl, setAvatarUrl] = useState("");
-  const [webUrl, setWebUrl] = useState("");
-  const [showCreateForm, setShowCreateForm] = useState(false); // State to control form visibility
+  const [reviewers, setReviewers] = useState([]); // All reviewers
+  const [showCreateForm, setShowCreateForm] = useState(false); // Toggle create form
+
+  // State for new reviewer creation
+  const [newReviewer, setNewReviewer] = useState({
+    channelName: "",
+    lastVideoChecked: "",
+    avatarUrl: "",
+    webUrl: "",
+    channelId: "",
+  });
+
+  // Pagination state (0-indexed for ReactPaginate)
+  const [currentPage, setCurrentPage] = useState(0);
+  const itemsPerPage = 1; // ONE card per page
+  const pageCount = Math.ceil(reviewers.length / itemsPerPage);
+  const currentPageData = reviewers.slice(
+    currentPage * itemsPerPage,
+    (currentPage + 1) * itemsPerPage
+  );
 
   // Fetch reviewers from Firestore
   useEffect(() => {
     const fetchReviewers = async () => {
       const querySnapshot = await getDocs(collection(db, "reviewers"));
-      const reviewersList = querySnapshot.docs.map(doc => ({
+      const reviewersList = querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
       setReviewers(reviewersList);
     };
-
     fetchReviewers();
   }, []);
 
-  // Handle selecting a reviewer to edit
-  const handleCardClick = (reviewer) => {
-    if (selectedReviewer?.id === reviewer.id) {
-      setSelectedReviewer(null); // Collapse if the same card is clicked again
-    } else {
-      setSelectedReviewer(reviewer);
-      setChannelName(reviewer.channelName);
-      setChannelId(reviewer.id);
-      setLastVideoChecked(reviewer.lastVideoChecked);
-      setAvatarUrl(reviewer.avatarUrl);
-      setWebUrl(reviewer.webUrl);
-    }
-  };  
+  // Handle page change
+  const handlePageClick = (data) => {
+    setCurrentPage(data.selected);
+  };
 
-  const handleUpdate = async () => {
+  // Update local reviewer value when an input changes
+  const updateLocalReviewerValue = (id, field, value) => {
+    setReviewers((prevReviewers) =>
+      prevReviewers.map((r) =>
+        r.id === id ? { ...r, [field]: value } : r
+      )
+    );
+  };
+
+  // Update a reviewer in Firebase
+  const handleUpdate = async (id) => {
+    const reviewer = reviewers.find((r) => r.id === id);
     try {
-      const reviewerRef = doc(db, "reviewers", channelId); // Collection name 'reviewers', using 'channelId' as the doc ID
-      await setDoc(reviewerRef, {
-        channelName,
-        lastVideoChecked,
-        avatarUrl,
-        webUrl,
-      }, { merge: true }); // Merge to update only specific fields
+      const reviewerRef = doc(db, "reviewers", id);
+      await setDoc(
+        reviewerRef,
+        {
+          channelName: reviewer.channelName,
+          lastVideoChecked: reviewer.lastVideoChecked,
+          avatarUrl: reviewer.avatarUrl,
+          webUrl: reviewer.webUrl,
+        },
+        { merge: true }
+      );
       console.log("Reviewer updated successfully!");
     } catch (error) {
       console.error("Error updating reviewer:", error);
     }
   };
 
-  const handleDelete = async () => {
+  // Delete a reviewer from Firebase
+  const handleDelete = async (id) => {
     try {
-      const reviewerRef = doc(db, "reviewers", channelId); // Collection name 'reviewers', using 'channelId' as the doc ID
+      const reviewerRef = doc(db, "reviewers", id);
       await deleteDoc(reviewerRef);
+      setReviewers((prevReviewers) =>
+        prevReviewers.filter((r) => r.id !== id)
+      );
       console.log("Reviewer deleted successfully!");
-      // Reset form after deletion
-      setSelectedReviewer(null);
-      setChannelName("");
-      setChannelId("");
-      setLastVideoChecked("");
-      setAvatarUrl("");
-      setWebUrl("");
     } catch (error) {
       console.error("Error deleting reviewer:", error);
     }
   };
 
+  // Create a new reviewer in Firebase
   const handleCreate = async () => {
     try {
-      const newReviewerRef = doc(collection(db, "reviewers")); // Generate a new document reference
+      const newReviewerRef = doc(collection(db, "reviewers"));
       await setDoc(newReviewerRef, {
-        avatarUrl,
-        lastVideoChecked,
-        channelName,
-        webUrl,
-        channelId,
+        channelName: newReviewer.channelName,
+        lastVideoChecked: newReviewer.lastVideoChecked,
+        avatarUrl: newReviewer.avatarUrl,
+        webUrl: newReviewer.webUrl,
+        channelId: newReviewer.channelId,
       });
       console.log("Reviewer created successfully!");
-      // Reset form after creating a new reviewer
-      setAvatarUrl("");
-      setLastVideoChecked("");
-      setChannelName("");
-      setWebUrl("");
-      setChannelId("");
-      setShowCreateForm(false); // Hide the form after creation
+      setNewReviewer({
+        channelName: "",
+        lastVideoChecked: "",
+        avatarUrl: "",
+        webUrl: "",
+        channelId: "",
+      });
+      setShowCreateForm(false);
     } catch (error) {
       console.error("Error creating reviewer:", error);
     }
@@ -102,98 +119,113 @@ export default function EditReviewers() {
     <Layout>
       <div className="p-6">
         <h1 className="text-2xl font-bold">Edit Reviewers</h1>
-        
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
-          {reviewers.map((reviewer) => (
-            <div
-            key={reviewer.id}
-            className="reviewer-card"
-            onClick={() => handleCardClick(reviewer)}
-          >
-            <img src={reviewer.avatarUrl} alt={reviewer.channelName} />
-            <div>
-              <h2>{reviewer.channelName}</h2>
-              <p>{reviewer.lastVideoChecked}</p>
-            </div>
-          </div>          
-          ))}
-        </div>
 
-        {selectedReviewer && (
-          <div className="mt-6 p-6 border rounded-lg">
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700">Avatar URL</label>
-              <input
-                type="text"
-                value={avatarUrl}
-                onChange={(e) => setAvatarUrl(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm custom-input"
-              />
-            </div>
-
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700">Last Video Checked</label>
-              <input
-                type="text"
-                value={lastVideoChecked}
-                onChange={(e) => setLastVideoChecked(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm custom-input"
-              />
-            </div>
-
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700">Channel Name</label>
-              <input
-                type="text"
-                value={channelName}
-                onChange={(e) => setChannelName(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm custom-input"
-              />
-            </div>
-
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700">Web URL</label>
-              <input
-                type="text"
-                value={webUrl}
-                onChange={(e) => setWebUrl(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm custom-input"
-              />
-            </div>
-
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700">Channel ID</label>
-              <input
-                type="text"
-                value={channelId}
-                onChange={(e) => setChannelId(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm custom-input"
-                disabled
-              />
-            </div>
-
-            <div className="mt-4">
-              <button
-                onClick={handleUpdate}
-                className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 custom-button"
-              >
-                Update
-              </button>
-              <button
-                onClick={handleDelete}
-                className="ml-3 inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 custom-button"
-              >
-                Delete
-              </button>
-            </div>
+        {/* Pagination Links at the Top */}
+        {pageCount > 1 && (
+          <div className="mt-4">
+            <ReactPaginate
+              previousLabel={"previous"}
+              nextLabel={"next"}
+              breakLabel={"..."}
+              pageCount={pageCount}
+              marginPagesDisplayed={2}
+              pageRangeDisplayed={5}
+              onPageChange={handlePageClick}
+              containerClassName={"pagination"}
+              activeClassName={"active"}
+            />
           </div>
         )}
+
+        {/* Reviewer Card (one per page) */}
+        <div className="card-container mt-6">
+          {currentPageData.map((reviewer) => (
+            <div key={reviewer.id} className="reviewer-card p-4 border rounded-lg shadow-md">
+              <div className="space-y-4">
+                <div className="text-center">
+                  <img
+                    src={reviewer.avatarUrl}
+                    alt={reviewer.channelName}
+                    className="w-16 h-16 rounded-full mx-auto"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Channel Name</label>
+                  <input
+                    type="text"
+                    value={reviewer.channelName || ""}
+                    onChange={(e) =>
+                      updateLocalReviewerValue(reviewer.id, "channelName", e.target.value)
+                    }
+                    className="custom-input"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Last Video Checked</label>
+                  <input
+                    type="text"
+                    value={reviewer.lastVideoChecked || ""}
+                    onChange={(e) =>
+                      updateLocalReviewerValue(reviewer.id, "lastVideoChecked", e.target.value)
+                    }
+                    className="custom-input"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Web URL</label>
+                  <input
+                    type="text"
+                    value={reviewer.webUrl || ""}
+                    onChange={(e) =>
+                      updateLocalReviewerValue(reviewer.id, "webUrl", e.target.value)
+                    }
+                    className="custom-input"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Avatar URL</label>
+                  <input
+                    type="text"
+                    value={reviewer.avatarUrl || ""}
+                    onChange={(e) =>
+                      updateLocalReviewerValue(reviewer.id, "avatarUrl", e.target.value)
+                    }
+                    className="custom-input"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Channel ID</label>
+                  <input
+                    type="text"
+                    value={reviewer.id}
+                    disabled
+                    className="custom-input"
+                  />
+                </div>
+                <div className="flex space-x-3 mt-4">
+                  <button
+                    onClick={() => handleUpdate(reviewer.id)}
+                    className="custom-button bg-indigo-600 hover:bg-indigo-700"
+                  >
+                    Update
+                  </button>
+                  <button
+                    onClick={() => handleDelete(reviewer.id)}
+                    className="custom-button bg-red-600 hover:bg-red-700"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
 
         {/* Create Reviewer Button */}
         <div className="mt-6">
           <button
-            onClick={() => setShowCreateForm(true)} // Show the create form
-            className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 custom-button"
+            onClick={() => setShowCreateForm(true)}
+            className="custom-button bg-green-600 hover:bg-green-700"
           >
             Create Reviewer
           </button>
@@ -201,74 +233,82 @@ export default function EditReviewers() {
 
         {/* Form for Creating Reviewer */}
         {showCreateForm && (
-          <div className="mt-6 p-6 border rounded-lg">
-          <h2 className="text-xl font-bold">Create New Reviewer</h2>
-        
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700">Avatar URL</label>
-            <input
-              type="text"
-              value={avatarUrl}
-              onChange={(e) => setAvatarUrl(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm custom-input"
-            />
+          <div className="mt-6 card-container">
+            <div className="p-6 border rounded-lg shadow-md bg-white">
+              <h2 className="text-xl font-bold mb-4">Create New Reviewer</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Avatar URL</label>
+                  <input
+                    type="text"
+                    value={newReviewer.avatarUrl}
+                    onChange={(e) =>
+                      setNewReviewer({ ...newReviewer, avatarUrl: e.target.value })
+                    }
+                    className="custom-input"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Last Video Checked</label>
+                  <input
+                    type="text"
+                    value={newReviewer.lastVideoChecked}
+                    onChange={(e) =>
+                      setNewReviewer({ ...newReviewer, lastVideoChecked: e.target.value })
+                    }
+                    className="custom-input"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Channel Name</label>
+                  <input
+                    type="text"
+                    value={newReviewer.channelName}
+                    onChange={(e) =>
+                      setNewReviewer({ ...newReviewer, channelName: e.target.value })
+                    }
+                    className="custom-input"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Web URL</label>
+                  <input
+                    type="text"
+                    value={newReviewer.webUrl}
+                    onChange={(e) =>
+                      setNewReviewer({ ...newReviewer, webUrl: e.target.value })
+                    }
+                    className="custom-input"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Channel ID</label>
+                  <input
+                    type="text"
+                    value={newReviewer.channelId}
+                    onChange={(e) =>
+                      setNewReviewer({ ...newReviewer, channelId: e.target.value })
+                    }
+                    className="custom-input"
+                  />
+                </div>
+              </div>
+              <div className="flex space-x-3 mt-4">
+                <button
+                  onClick={handleCreate}
+                  className="custom-button bg-green-600 hover:bg-green-700"
+                >
+                  Create
+                </button>
+                <button
+                  onClick={() => setShowCreateForm(false)}
+                  className="custom-button bg-red-600 hover:bg-red-700"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
           </div>
-        
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700">Last Video Checked</label>
-            <input
-              type="text"
-              value={lastVideoChecked}
-              onChange={(e) => setLastVideoChecked(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm custom-input"
-            />
-          </div>
-        
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700">Channel Name</label>
-            <input
-              type="text"
-              value={channelName}
-              onChange={(e) => setChannelName(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm custom-input"
-            />
-          </div>
-        
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700">Web URL</label>
-            <input
-              type="text"
-              value={webUrl}
-              onChange={(e) => setWebUrl(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm custom-input"
-            />
-          </div>
-        
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700">Channel ID</label>
-            <input
-              type="text"
-              value={channelId}
-              onChange={(e) => setChannelId(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm custom-input"
-            />
-          </div>
-        
-          <div className="mt-4 flex space-x-3">
-            <button
-              onClick={handleCreate}
-              className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 custom-button"
-            >
-              Create
-            </button>
-            <button
-              onClick={() => setShowCreateForm(false)}
-              className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 custom-button"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>        
         )}
       </div>
     </Layout>

@@ -117,7 +117,7 @@ export default function EditReviewers() {
 
   return (
     <Layout>
-      <div className="p-6">
+      <div className="p-6 flex flex-col items-center justify-center min-h-screen">
         <h1 className="text-2xl font-bold">Edit Reviewers</h1>
 
         {/* Pagination Links at the Top */}
@@ -138,10 +138,10 @@ export default function EditReviewers() {
         )}
 
         {/* Reviewer Card (one per page) */}
-        <div className="card-container mt-6">
+        <div className="card-container mt-6 flex flex-col items-center justify-center">
           {currentPageData.map((reviewer) => (
-            <div key={reviewer.id} className="reviewer-card p-4 border rounded-lg shadow-md">
-              <div className="space-y-4">
+            <div key={reviewer.id} className="reviewer-card p-4 border rounded-lg shadow-md flex flex-col items-center justify-center">
+              <div className="space-y-4 w-full">
                 <div className="text-center">
                   <img
                     src={reviewer.avatarUrl}
@@ -149,7 +149,7 @@ export default function EditReviewers() {
                     className="w-16 h-16 rounded-full mx-auto"
                   />
                 </div>
-                <div>
+                <div className="flex flex-col items-center justify-center">
                   <label className="block text-sm font-medium text-gray-700">Channel Name</label>
                   <input
                     type="text"
@@ -160,7 +160,7 @@ export default function EditReviewers() {
                     className="custom-input"
                   />
                 </div>
-                <div>
+                <div className="flex flex-col items-center justify-center">
                   <label className="block text-sm font-medium text-gray-700">Last Video Checked</label>
                   <input
                     type="text"
@@ -171,7 +171,7 @@ export default function EditReviewers() {
                     className="custom-input"
                   />
                 </div>
-                <div>
+                <div className="flex flex-col items-center justify-center">
                   <label className="block text-sm font-medium text-gray-700">Web URL</label>
                   <input
                     type="text"
@@ -182,7 +182,7 @@ export default function EditReviewers() {
                     className="custom-input"
                   />
                 </div>
-                <div>
+                <div className="flex flex-col items-center justify-center">
                   <label className="block text-sm font-medium text-gray-700">Avatar URL</label>
                   <input
                     type="text"
@@ -193,7 +193,7 @@ export default function EditReviewers() {
                     className="custom-input"
                   />
                 </div>
-                <div>
+                <div className="flex flex-col items-center justify-center">
                   <label className="block text-sm font-medium text-gray-700">Channel ID</label>
                   <input
                     type="text"
@@ -202,7 +202,7 @@ export default function EditReviewers() {
                     className="custom-input"
                   />
                 </div>
-                <div className="flex space-x-3 mt-4">
+                <div className="flex space-x-3 mt-4 justify-center">
                   <button
                     onClick={() => handleUpdate(reviewer.id)}
                     className="custom-button bg-indigo-600 hover:bg-indigo-700"
@@ -233,11 +233,11 @@ export default function EditReviewers() {
 
         {/* Form for Creating Reviewer */}
         {showCreateForm && (
-          <div className="mt-6 card-container">
-            <div className="p-6 border rounded-lg shadow-md bg-white">
+          <div className="mt-6 card-container flex flex-col items-center justify-center">
+            <div className="p-6 border rounded-lg shadow-md bg-white w-full">
               <h2 className="text-xl font-bold mb-4">Create New Reviewer</h2>
               <div className="space-y-4">
-                <div>
+                <div className="flex flex-col items-center justify-center">
                   <label className="block text-sm font-medium text-gray-700">Avatar URL</label>
                   <input
                     type="text"
@@ -248,7 +248,7 @@ export default function EditReviewers() {
                     className="custom-input"
                   />
                 </div>
-                <div>
+                <div className="flex flex-col items-center justify-center">
                   <label className="block text-sm font-medium text-gray-700">Last Video Checked</label>
                   <input
                     type="text"
@@ -259,7 +259,7 @@ export default function EditReviewers() {
                     className="custom-input"
                   />
                 </div>
-                <div>
+                <div className="flex flex-col items-center justify-center">
                   <label className="block text-sm font-medium text-gray-700">Channel Name</label>
                   <input
                     type="text"
@@ -270,7 +270,7 @@ export default function EditReviewers() {
                     className="custom-input"
                   />
                 </div>
-                <div>
+                <div className="flex flex-col items-center justify-center">
                   <label className="block text-sm font-medium text-gray-700">Web URL</label>
                   <input
                     type="text"
@@ -281,7 +281,7 @@ export default function EditReviewers() {
                     className="custom-input"
                   />
                 </div>
-                <div>
+                <div className="flex flex-col items-center justify-center">
                   <label className="block text-sm font-medium text-gray-700">Channel ID</label>
                   <input
                     type="text"
@@ -293,7 +293,7 @@ export default function EditReviewers() {
                   />
                 </div>
               </div>
-              <div className="flex space-x-3 mt-4">
+              <div className="flex space-x-3 mt-4 justify-center">
                 <button
                   onClick={handleCreate}
                   className="custom-button bg-green-600 hover:bg-green-700"

@@ -48,6 +48,42 @@ h1 {
   color: var(--foreground);
 }
 
+/* Reviewer Card Styles */
+.reviewer-card {
+  background: var(--input-background);
+  border: 1px solid var(--input-border);
+  border-radius: 12px;
+  padding: 1rem;
+  transition: box-shadow 0.2s ease-in-out, transform 0.2s ease-in-out;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.reviewer-card:hover {
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  transform: scale(1.02);
+}
+
+.reviewer-card img {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.reviewer-card h2 {
+  font-size: 1rem;
+  font-weight: bold;
+  color: var(--foreground);
+}
+
+.reviewer-card p {
+  font-size: 0.875rem;
+  color: gray;
+}
+
 /* Form input styles */
 .custom-input {
   background-color: var(--input-background);

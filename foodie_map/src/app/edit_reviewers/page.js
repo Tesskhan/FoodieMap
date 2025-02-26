@@ -31,13 +31,17 @@ export default function EditReviewers() {
 
   // Handle selecting a reviewer to edit
   const handleCardClick = (reviewer) => {
-    setSelectedReviewer(reviewer);
-    setChannelName(reviewer.channelName);
-    setChannelId(reviewer.id); // Use the Firestore document ID as the channel ID
-    setLastVideoChecked(reviewer.lastVideoChecked);
-    setAvatarUrl(reviewer.avatarUrl);
-    setWebUrl(reviewer.webUrl);
-  };
+    if (selectedReviewer?.id === reviewer.id) {
+      setSelectedReviewer(null); // Collapse if the same card is clicked again
+    } else {
+      setSelectedReviewer(reviewer);
+      setChannelName(reviewer.channelName);
+      setChannelId(reviewer.id);
+      setLastVideoChecked(reviewer.lastVideoChecked);
+      setAvatarUrl(reviewer.avatarUrl);
+      setWebUrl(reviewer.webUrl);
+    }
+  };  
 
   const handleUpdate = async () => {
     try {
@@ -75,18 +79,19 @@ export default function EditReviewers() {
     try {
       const newReviewerRef = doc(collection(db, "reviewers")); // Generate a new document reference
       await setDoc(newReviewerRef, {
-        channelName,
-        lastVideoChecked,
         avatarUrl,
+        lastVideoChecked,
+        channelName,
         webUrl,
+        channelId,
       });
       console.log("Reviewer created successfully!");
       // Reset form after creating a new reviewer
-      setChannelName("");
-      setChannelId("");
-      setLastVideoChecked("");
       setAvatarUrl("");
+      setLastVideoChecked("");
+      setChannelName("");
       setWebUrl("");
+      setChannelId("");
       setShowCreateForm(false); // Hide the form after creation
     } catch (error) {
       console.error("Error creating reviewer:", error);
@@ -101,39 +106,28 @@ export default function EditReviewers() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
           {reviewers.map((reviewer) => (
             <div
-              key={reviewer.id}
-              className="p-4 border rounded-lg shadow-md hover:shadow-lg cursor-pointer"
-              onClick={() => handleCardClick(reviewer)}
-            >
-              <h2 className="text-lg font-semibold">{reviewer.channelName}</h2>
-              <p className="text-sm text-gray-500">{reviewer.lastVideoChecked}</p>
-              <img src={reviewer.avatarUrl} alt={reviewer.channelName} className="h-12 w-12 rounded-full" />
+            key={reviewer.id}
+            className="reviewer-card"
+            onClick={() => handleCardClick(reviewer)}
+          >
+            <img src={reviewer.avatarUrl} alt={reviewer.channelName} />
+            <div>
+              <h2>{reviewer.channelName}</h2>
+              <p>{reviewer.lastVideoChecked}</p>
             </div>
+          </div>          
           ))}
         </div>
 
         {selectedReviewer && (
           <div className="mt-6 p-6 border rounded-lg">
-            <h2 className="text-xl font-bold">Edit {selectedReviewer.channelName}</h2>
-
             <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700">Channel Name</label>
+              <label className="block text-sm font-medium text-gray-700">Avatar URL</label>
               <input
                 type="text"
-                value={channelName}
-                onChange={(e) => setChannelName(e.target.value)}
+                value={avatarUrl}
+                onChange={(e) => setAvatarUrl(e.target.value)}
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm custom-input"
-              />
-            </div>
-
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700">Channel ID</label>
-              <input
-                type="text"
-                value={channelId}
-                onChange={(e) => setChannelId(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm custom-input"
-                disabled
               />
             </div>
 
@@ -148,11 +142,11 @@ export default function EditReviewers() {
             </div>
 
             <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700">Avatar URL</label>
+              <label className="block text-sm font-medium text-gray-700">Channel Name</label>
               <input
                 type="text"
-                value={avatarUrl}
-                onChange={(e) => setAvatarUrl(e.target.value)}
+                value={channelName}
+                onChange={(e) => setChannelName(e.target.value)}
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm custom-input"
               />
             </div>
@@ -164,6 +158,17 @@ export default function EditReviewers() {
                 value={webUrl}
                 onChange={(e) => setWebUrl(e.target.value)}
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm custom-input"
+              />
+            </div>
+
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700">Channel ID</label>
+              <input
+                type="text"
+                value={channelId}
+                onChange={(e) => setChannelId(e.target.value)}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm custom-input"
+                disabled
               />
             </div>
 
@@ -197,57 +202,73 @@ export default function EditReviewers() {
         {/* Form for Creating Reviewer */}
         {showCreateForm && (
           <div className="mt-6 p-6 border rounded-lg">
-            <h2 className="text-xl font-bold">Create New Reviewer</h2>
-
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700">Channel Name</label>
-              <input
-                type="text"
-                value={channelName}
-                onChange={(e) => setChannelName(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm custom-input"
-              />
-            </div>
-
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700">Last Video Checked</label>
-              <input
-                type="text"
-                value={lastVideoChecked}
-                onChange={(e) => setLastVideoChecked(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm custom-input"
-              />
-            </div>
-
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700">Avatar URL</label>
-              <input
-                type="text"
-                value={avatarUrl}
-                onChange={(e) => setAvatarUrl(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm custom-input"
-              />
-            </div>
-
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700">Web URL</label>
-              <input
-                type="text"
-                value={webUrl}
-                onChange={(e) => setWebUrl(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm custom-input"
-              />
-            </div>
-
-            <div className="mt-4">
-              <button
-                onClick={handleCreate}
-                className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 custom-button"
-              >
-                Create
-              </button>
-            </div>
+          <h2 className="text-xl font-bold">Create New Reviewer</h2>
+        
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700">Avatar URL</label>
+            <input
+              type="text"
+              value={avatarUrl}
+              onChange={(e) => setAvatarUrl(e.target.value)}
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm custom-input"
+            />
           </div>
+        
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700">Last Video Checked</label>
+            <input
+              type="text"
+              value={lastVideoChecked}
+              onChange={(e) => setLastVideoChecked(e.target.value)}
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm custom-input"
+            />
+          </div>
+        
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700">Channel Name</label>
+            <input
+              type="text"
+              value={channelName}
+              onChange={(e) => setChannelName(e.target.value)}
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm custom-input"
+            />
+          </div>
+        
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700">Web URL</label>
+            <input
+              type="text"
+              value={webUrl}
+              onChange={(e) => setWebUrl(e.target.value)}
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm custom-input"
+            />
+          </div>
+        
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700">Channel ID</label>
+            <input
+              type="text"
+              value={channelId}
+              onChange={(e) => setChannelId(e.target.value)}
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm custom-input"
+            />
+          </div>
+        
+          <div className="mt-4 flex space-x-3">
+            <button
+              onClick={handleCreate}
+              className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 custom-button"
+            >
+              Create
+            </button>
+            <button
+              onClick={() => setShowCreateForm(false)}
+              className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 custom-button"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>        
         )}
       </div>
     </Layout>

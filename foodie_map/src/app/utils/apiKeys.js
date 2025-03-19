@@ -7,4 +7,4 @@ const apiKeys = {
 
 };
 
-export default apiKeys;
+export const YOUTUBE_API_KEY = apiKeys.YOUTUBE_API_KEY;

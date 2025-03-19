@@ -144,7 +144,7 @@ export default function EditReviewers() {
     }
     setIsFetchingVideos(true);
     try {
-      const videosUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${newReviewerData.youtubeChannelId}&maxResults=50&order=date&pageToken=&key=${YOUTUBE_API_KEY}`;
+      const videosUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${newReviewerData.youtubeChannelId}&maxResults=10&order=date&pageToken=&key=${YOUTUBE_API_KEY}`;
       const videosRes = await fetch(videosUrl);
       const videosData = await videosRes.json();
       let lastVideoChecked = "";
@@ -242,6 +242,7 @@ export default function EditReviewers() {
         const reviewerRef = doc(db, "Reviewers", reviewerId);
         await setDoc(reviewerRef, { youtubeChannelId: channelId }, { merge: true });
         alert("Channel ID extracted and updated successfully.");
+        console.log("Extracted Channel ID:", channelId);
       } else {
         alert("No channel found with the provided information");
       }
@@ -260,44 +261,81 @@ export default function EditReviewers() {
    */
   const fetchVideosForExistingReviewer = async (reviewerId) => {
     const reviewer = reviewers.find((r) => r.id === reviewerId);
-    if (!reviewer.youtubeChannelId) {
-      alert("Please extract the Channel ID for this reviewer first.");
+    
+    if (!reviewer?.youtubeChannelId) {
+      alert("Please extract a valid Channel ID first.");
       return;
     }
+  
     setIsFetchingVideos(true);
+    
     try {
-      const videosUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${reviewer.youtubeChannelId}&maxResults=50&order=date&pageToken=&key=${YOUTUBE_API_KEY}`;
-      const videosRes = await fetch(videosUrl);
-      const videosData = await videosRes.json();
-      let lastVideoChecked = "";
-      if (videosData.items && videosData.items.length > 0) {
-        const latestVideo = videosData.items[0];
-        lastVideoChecked = latestVideo.snippet.publishedAt;
-        // Save the latest video details in the "VideosToEdit" collection.
-        await setDoc(doc(db, "VideosToEdit"), {
-          channelId: reviewer.youtubeChannelId,
-          videoId: latestVideo.id.videoId || "",
-          title: latestVideo.snippet.title,
-          description: latestVideo.snippet.description,
-          publishedAt: latestVideo.snippet.publishedAt,
-          thumbnails: latestVideo.snippet.thumbnails,
-          fetchedAt: new Date().toISOString(),
-        });
+      // First verify the channel ID is valid
+      const channelsUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet&id=${reviewer.youtubeChannelId}&key=${YOUTUBE_API_KEY}`;
+      const channelsRes = await fetch(channelsUrl);
+      
+      if (!channelsRes.ok) {
+        throw new Error(`Channel verification failed: ${channelsRes.status}`);
       }
-      const updatedReviewer = { ...reviewer, lastVideoChecked };
-      // Update local state.
-      setReviewers((prev) =>
-        prev.map((r) => (r.id === reviewerId ? updatedReviewer : r))
-      );
-      // Update Firestore.
-      const reviewerRef = doc(db, "Reviewers", reviewerId);
-      await setDoc(reviewerRef, { lastVideoChecked }, { merge: true });
-      alert("Videos fetched and last video checked updated successfully.");
+  
+      const channelsData = await channelsRes.json();
+      
+      if (!channelsData.items?.length) {
+        alert("Invalid YouTube channel ID");
+        return;
+      }
+  
+      // Now fetch videos
+      const videosUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&channelId=${reviewer.youtubeChannelId}&order=date&maxResults=10&key=${YOUTUBE_API_KEY}`;
+      const videosRes = await fetch(videosUrl);
+      
+      if (!videosRes.ok) {
+        throw new Error(`Video fetch failed: ${videosRes.status}`);
+      }
+  
+      const videosData = await videosRes.json();
+      
+      if (!videosData.items?.length) {
+        alert("No videos found for this channel");
+        return;
+      }
+  
+      // Process videos
+      const latestVideo = videosData.items[0].snippet;
+      const videoId = videosData.items[0].id?.videoId;
+      
+      if (!videoId) {
+        throw new Error("No video ID found in response");
+      }
+  
+      // Update Firestore
+      await setDoc(doc(db, "VideosToEdit", videoId), {
+        channelId: reviewer.youtubeChannelId,
+        videoId,
+        title: latestVideo.title,
+        description: latestVideo.description,
+        publishedAt: latestVideo.publishedAt,
+        thumbnails: latestVideo.thumbnails,
+        fetchedAt: new Date().toISOString(),
+      });
+  
+      // Update reviewer
+      const lastVideoChecked = latestVideo.publishedAt;
+      await setDoc(doc(db, "Reviewers", reviewerId), { lastVideoChecked }, { merge: true });
+      
+      // Update local state
+      setReviewers(prev => prev.map(r => 
+        r.id === reviewerId ? {...r, lastVideoChecked} : r
+      ));
+  
+      alert("Successfully fetched latest videos!");
+  
     } catch (error) {
-      console.error("Error fetching videos", error);
-      alert("Error fetching videos");
+      console.error("Video fetch error:", error);
+      alert(`Failed to fetch videos: ${error.message}`);
+    } finally {
+      setIsFetchingVideos(false);
     }
-    setIsFetchingVideos(false);
   };
 
   /**
@@ -493,7 +531,9 @@ export default function EditReviewers() {
                   <input
                     type="text"
                     value={reviewer.youtubeChannelId || ""}
-                    disabled
+                    onChange={(e) =>
+                      updateReviewerField(reviewer.id, "youtubeChannelId", e.target.value)
+                    }
                     className="custom-input"
                   />
                 </div>

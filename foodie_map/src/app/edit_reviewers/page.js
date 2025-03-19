@@ -2,17 +2,24 @@
 import Layout from "../components/Layout";
 import ReactPaginate from "react-paginate";
 import { useState, useEffect } from "react";
-import { YOUTUBE_API_KEY } from "../utils/youtube_api_key"; // Your YouTube API key
+import { YOUTUBE_API_KEY } from "../utils/apiKeys"; // Your YouTube API key
 import { db } from "../firebase"; // Firebase configuration
 import { collection, getDocs, doc, setDoc, deleteDoc } from "firebase/firestore";
 import "../globals.css";
 
-// Default avatar URL
-const DEFAULT_AVATAR = "https://via.placeholder.com/150";
+// Default avatar URL if no image is provided
+const DEFAULT_AVATAR = "https://th.bing.com/th/id/R.0ababdb27dd0bb71f21f03c98b6cd6f1?rik=%2fiVDxahrgNztPA&pid=ImgRaw&r=0";
 
-// Helper function to extract an identifier from a YouTube URL.
-// It checks for various URL formats: /channel/ (direct channel id),
-// /@ (handle), or /c/ (custom URL).
+/**
+ * Extracts a potential identifier (handle, custom URL, or channel ID) from a given YouTube URL.
+ * This function checks for URLs that contain:
+ * - /channel/ (direct channel id)
+ * - /@ (channel handle)
+ * - /c/ (custom channel URL)
+ *
+ * @param {string} webUrl - The YouTube URL to extract from.
+ * @returns {string} The extracted identifier or an empty string if not found.
+ */
 const extractChannelIdentifier = (webUrl) => {
   let match = webUrl.match(/youtube\.com\/channel\/([a-zA-Z0-9_-]+)/);
   if (match) return match[1];
@@ -24,16 +31,18 @@ const extractChannelIdentifier = (webUrl) => {
 };
 
 export default function EditReviewers() {
+  // State to store all reviewer documents fetched from Firestore.
   const [reviewers, setReviewers] = useState([]);
+  // State to toggle display of the create reviewer form.
   const [showCreateForm, setShowCreateForm] = useState(false);
+  // State to store the search term for filtering reviewers.
   const [searchTerm, setSearchTerm] = useState("");
+  // State to indicate whether videos are currently being fetched.
   const [isFetchingVideos, setIsFetchingVideos] = useState(false);
 
-  // State for new reviewer creation.
-  // The Channel Name, Avatar URL and Web URL are input manually.
-  // The youtubeChannelId is extracted from the Web URL,
-  // and the lastVideoChecked is fetched via the Fetch Videos button.
-  const [newReviewer, setNewReviewer] = useState({
+  // State for the new reviewer being created.
+  // Channel Name is required; others are optional and may be updated later.
+  const [newReviewerData, setNewReviewerData] = useState({
     channelName: "",
     lastVideoChecked: "",
     avatarUrl: "",
@@ -41,37 +50,79 @@ export default function EditReviewers() {
     youtubeChannelId: "",
   });
 
-  // Update newReviewer when the Web URL changes.
-  const handleWebUrlChange = (e) => {
-    const webUrl = e.target.value;
-    setNewReviewer({ ...newReviewer, webUrl });
+  // Pagination state for displaying reviewer cards.
+  const [currentPage, setCurrentPage] = useState(0);
+  const itemsPerPage = 1; // Display one reviewer card per page
+
+  // Filter reviewers based on the search term (case-insensitive).
+  const filteredReviewers = reviewers.filter((r) =>
+    r.channelName.toLowerCase().startsWith(searchTerm.toLowerCase())
+  );
+  const pageCount = Math.ceil(filteredReviewers.length / itemsPerPage);
+  const currentPageData = filteredReviewers.slice(
+    currentPage * itemsPerPage,
+    (currentPage + 1) * itemsPerPage
+  );
+
+  // ------------------ Firestore Data Fetching ------------------
+
+  /**
+   * Fetches reviewer documents from Firestore and sets the reviewers state.
+   */
+  useEffect(() => {
+    const fetchReviewersFromFirestore = async () => {
+      const querySnapshot = await getDocs(collection(db, "Reviewers"));
+      const reviewersList = querySnapshot.docs.map((doc) => ({
+        id: doc.id, // Firestore document ID
+        ...doc.data(),
+      }));
+      setReviewers(reviewersList);
+    };
+    fetchReviewersFromFirestore();
+  }, []);
+
+  // ------------------ Search Handler ------------------
+
+  /**
+   * Handles changes to the search input and resets pagination.
+   */
+  const handleSearchTermChange = (e) => {
+    setSearchTerm(e.target.value);
+    setCurrentPage(0);
   };
 
-  // --- Functions for the Create Form (unchanged) ---
+  // ------------------ New Reviewer Creation Functions ------------------
 
-  const handleExtractChannelID = async () => {
-    if (!newReviewer.webUrl) {
+  /**
+   * Handles changes to the new reviewer's web URL.
+   */
+  const handleNewReviewerWebUrlChange = (e) => {
+    const webUrl = e.target.value;
+    setNewReviewerData({ ...newReviewerData, webUrl });
+  };
+
+  /**
+   * Extracts the channel ID for a new reviewer using the YouTube search endpoint.
+   * Uses the extracted identifier (handle, etc.) as the query parameter.
+   */
+  const extractChannelIdForNewReviewer = async () => {
+    if (!newReviewerData.webUrl) {
       alert("Please enter a valid Web URL first");
       return;
     }
-    const identifier = extractChannelIdentifier(newReviewer.webUrl);
+    const identifier = extractChannelIdentifier(newReviewerData.webUrl);
     if (!identifier) {
       alert("The Web URL does not have a recognized format");
       return;
     }
     try {
-      const channelApiUrl = identifier.startsWith("UC")
-        ? `https://www.googleapis.com/youtube/v3/channels?part=snippet&id=${identifier}&key=${YOUTUBE_API_KEY}`
-        : `https://www.googleapis.com/youtube/v3/channels?part=snippet&forUsername=${identifier}&key=${YOUTUBE_API_KEY}`;
-      const res = await fetch(channelApiUrl);
+      const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q=${identifier}&key=${YOUTUBE_API_KEY}`;
+      const res = await fetch(searchUrl);
       const data = await res.json();
       if (data.items && data.items.length > 0) {
-        const channelInfo = data.items[0];
-        const channelId = channelInfo.id;
-        setNewReviewer({
-          ...newReviewer,
-          youtubeChannelId: channelId,
-        });
+        // Use the channelId from the search results.
+        const channelId = data.items[0].id.channelId;
+        setNewReviewerData({ ...newReviewerData, youtubeChannelId: channelId });
       } else {
         alert("No channel found with the provided information");
       }
@@ -81,25 +132,28 @@ export default function EditReviewers() {
     }
   };
 
-  const handleFetchVideos = async () => {
+  /**
+   * Loads the latest videos for the new reviewer by calling the YouTube API.
+   * Updates the 'lastVideoChecked' field and stores the video details in the 'VideosToEdit' Firestore collection.
+   */
+  const fetchVideosForNewReviewer = async () => {
     if (isFetchingVideos) return;
-    if (!newReviewer.youtubeChannelId) {
+    if (!newReviewerData.youtubeChannelId) {
       alert("Please extract the Channel ID first.");
       return;
     }
     setIsFetchingVideos(true);
     try {
-      const videosRes = await fetch(
-        `https://www.googleapis.com/youtube/v3/search?key=${YOUTUBE_API_KEY}&channelId=${newReviewer.youtubeChannelId}&part=snippet&order=date&maxResults=1`
-      );
+      const videosUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${newReviewerData.youtubeChannelId}&maxResults=50&order=date&pageToken=&key=${YOUTUBE_API_KEY}`;
+      const videosRes = await fetch(videosUrl);
       const videosData = await videosRes.json();
       let lastVideoChecked = "";
       if (videosData.items && videosData.items.length > 0) {
         const latestVideo = videosData.items[0];
         lastVideoChecked = latestVideo.snippet.publishedAt;
-        // Store video details in "VideosToEdit"
+        // Save the latest video details in the "VideosToEdit" collection.
         await setDoc(doc(db, "VideosToEdit"), {
-          channelId: newReviewer.youtubeChannelId,
+          channelId: newReviewerData.youtubeChannelId,
           videoId: latestVideo.id.videoId || "",
           title: latestVideo.snippet.title,
           description: latestVideo.snippet.description,
@@ -108,10 +162,7 @@ export default function EditReviewers() {
           fetchedAt: new Date().toISOString(),
         });
       }
-      setNewReviewer({
-        ...newReviewer,
-        lastVideoChecked: lastVideoChecked,
-      });
+      setNewReviewerData({ ...newReviewerData, lastVideoChecked });
     } catch (error) {
       console.error("Error fetching videos", error);
       alert("Error fetching videos");
@@ -119,10 +170,54 @@ export default function EditReviewers() {
     setIsFetchingVideos(false);
   };
 
-  // --- New Functions for Existing Reviewer Entries ---
+  /**
+   * Creates a new reviewer document in Firestore using the newReviewerData state.
+   * If a YouTube channel ID exists, it is used as the document ID.
+   * Upon successful creation, the new reviewer is added to local state.
+   */
+  const createNewReviewer = async () => {
+    if (!newReviewerData.channelName || !newReviewerData.webUrl) {
+      alert("Channel Name and Web URL are required to add a new reviewer.");
+      return;
+    }
+    try {
+      const reviewerDoc = newReviewerData.youtubeChannelId
+        ? doc(db, "Reviewers", newReviewerData.youtubeChannelId)
+        : doc(collection(db, "Reviewers"));
+      await setDoc(reviewerDoc, {
+        channelName: newReviewerData.channelName,
+        lastVideoChecked: newReviewerData.lastVideoChecked,
+        avatarUrl: newReviewerData.avatarUrl,
+        webUrl: newReviewerData.webUrl,
+        youtubeChannelId: newReviewerData.youtubeChannelId,
+      });
+      console.log("Reviewer created successfully!");
+      const createdReviewer = { id: reviewerDoc.id, ...newReviewerData };
+      setReviewers((prev) => [...prev, createdReviewer]);
+      // Clear new reviewer form fields.
+      setNewReviewerData({
+        channelName: "",
+        lastVideoChecked: "",
+        avatarUrl: "",
+        webUrl: "",
+        youtubeChannelId: "",
+      });
+      setShowCreateForm(false);
+    } catch (error) {
+      console.error("Error creating reviewer:", error);
+    }
+  };
 
-  const handleExtractChannelIDForReviewer = async (id) => {
-    const reviewer = reviewers.find((r) => r.id === id);
+  // ------------------ Existing Reviewer Update Functions ------------------
+
+  /**
+   * Extracts the channel ID for an existing reviewer.
+   * Uses the YouTube search endpoint and updates both local state and Firestore.
+   *
+   * @param {string} reviewerId - The Firestore document ID of the reviewer.
+   */
+  const extractChannelIdForExistingReviewer = async (reviewerId) => {
+    const reviewer = reviewers.find((r) => r.id === reviewerId);
     if (!reviewer.webUrl) {
       alert("Please enter a valid Web URL for this reviewer first.");
       return;
@@ -133,21 +228,18 @@ export default function EditReviewers() {
       return;
     }
     try {
-      const channelApiUrl = identifier.startsWith("UC")
-        ? `https://www.googleapis.com/youtube/v3/channels?part=snippet&id=${identifier}&key=${YOUTUBE_API_KEY}`
-        : `https://www.googleapis.com/youtube/v3/channels?part=snippet&forUsername=${identifier}&key=${YOUTUBE_API_KEY}`;
-      const res = await fetch(channelApiUrl);
+      const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q=${identifier}&key=${YOUTUBE_API_KEY}`;
+      const res = await fetch(searchUrl);
       const data = await res.json();
       if (data.items && data.items.length > 0) {
-        const channelInfo = data.items[0];
-        const channelId = channelInfo.id;
-        // Update the reviewer's channel ID locally...
+        const channelId = data.items[0].id.channelId;
         const updatedReviewer = { ...reviewer, youtubeChannelId: channelId };
+        // Update the reviewer in local state.
         setReviewers((prev) =>
-          prev.map((r) => (r.id === id ? updatedReviewer : r))
+          prev.map((r) => (r.id === reviewerId ? updatedReviewer : r))
         );
-        // ...and update Firestore.
-        const reviewerRef = doc(db, "Reviewers", id);
+        // Update the reviewer document in Firestore.
+        const reviewerRef = doc(db, "Reviewers", reviewerId);
         await setDoc(reviewerRef, { youtubeChannelId: channelId }, { merge: true });
         alert("Channel ID extracted and updated successfully.");
       } else {
@@ -159,23 +251,29 @@ export default function EditReviewers() {
     }
   };
 
-  const handleFetchVideosForReviewer = async (id) => {
-    const reviewer = reviewers.find((r) => r.id === id);
+  /**
+   * Fetches the latest videos for an existing reviewer using the YouTube API.
+   * Updates the reviewer's "lastVideoChecked" field in local state and Firestore,
+   * and stores the video details in the "VideosToEdit" collection.
+   *
+   * @param {string} reviewerId - The Firestore document ID of the reviewer.
+   */
+  const fetchVideosForExistingReviewer = async (reviewerId) => {
+    const reviewer = reviewers.find((r) => r.id === reviewerId);
     if (!reviewer.youtubeChannelId) {
       alert("Please extract the Channel ID for this reviewer first.");
       return;
     }
     setIsFetchingVideos(true);
     try {
-      const videosRes = await fetch(
-        `https://www.googleapis.com/youtube/v3/search?key=${YOUTUBE_API_KEY}&channelId=${reviewer.youtubeChannelId}&part=snippet&order=date&maxResults=1`
-      );
+      const videosUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${reviewer.youtubeChannelId}&maxResults=50&order=date&pageToken=&key=${YOUTUBE_API_KEY}`;
+      const videosRes = await fetch(videosUrl);
       const videosData = await videosRes.json();
       let lastVideoChecked = "";
       if (videosData.items && videosData.items.length > 0) {
         const latestVideo = videosData.items[0];
         lastVideoChecked = latestVideo.snippet.publishedAt;
-        // Store the latest video details in "VideosToEdit".
+        // Save the latest video details in the "VideosToEdit" collection.
         await setDoc(doc(db, "VideosToEdit"), {
           channelId: reviewer.youtubeChannelId,
           videoId: latestVideo.id.videoId || "",
@@ -186,13 +284,13 @@ export default function EditReviewers() {
           fetchedAt: new Date().toISOString(),
         });
       }
-      // Update reviewer locally...
       const updatedReviewer = { ...reviewer, lastVideoChecked };
+      // Update local state.
       setReviewers((prev) =>
-        prev.map((r) => (r.id === id ? updatedReviewer : r))
+        prev.map((r) => (r.id === reviewerId ? updatedReviewer : r))
       );
-      // ...and update Firestore.
-      const reviewerRef = doc(db, "Reviewers", id);
+      // Update Firestore.
+      const reviewerRef = doc(db, "Reviewers", reviewerId);
       await setDoc(reviewerRef, { lastVideoChecked }, { merge: true });
       alert("Videos fetched and last video checked updated successfully.");
     } catch (error) {
@@ -202,50 +300,15 @@ export default function EditReviewers() {
     setIsFetchingVideos(false);
   };
 
-  // Fetch reviewers from Firestore on component mount.
-  useEffect(() => {
-    const fetchReviewers = async () => {
-      const querySnapshot = await getDocs(collection(db, "Reviewers"));
-      const reviewersList = querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setReviewers(reviewersList);
-    };
-    fetchReviewers();
-  }, []);
-
-  // Filter reviewers by channel name based on the search term.
-  const filteredReviewers = reviewers.filter((r) =>
-    r.channelName.toLowerCase().startsWith(searchTerm.toLowerCase())
-  );
-
-  // Pagination setup.
-  const [currentPage, setCurrentPage] = useState(0);
-  const itemsPerPage = 1; // One card per page
-  const pageCount = Math.ceil(filteredReviewers.length / itemsPerPage);
-  const currentPageData = filteredReviewers.slice(
-    currentPage * itemsPerPage,
-    (currentPage + 1) * itemsPerPage
-  );
-
-  // Handle page change.
-  const handlePageClick = (data) => {
-    setCurrentPage(data.selected);
-  };
-
-  // Update local reviewer value when an input changes.
-  const updateLocalReviewerValue = (id, field, value) => {
-    setReviewers((prevReviewers) =>
-      prevReviewers.map((r) => (r.id === id ? { ...r, [field]: value } : r))
-    );
-  };
-
-  // Update a reviewer in Firestore.
-  const handleUpdate = async (id) => {
-    const reviewer = reviewers.find((r) => r.id === id);
+  /**
+   * Updates an existing reviewer document in Firestore with the local state values.
+   *
+   * @param {string} reviewerId - The Firestore document ID of the reviewer.
+   */
+  const updateReviewerInFirestore = async (reviewerId) => {
+    const reviewer = reviewers.find((r) => r.id === reviewerId);
     try {
-      const reviewerRef = doc(db, "Reviewers", id);
+      const reviewerRef = doc(db, "Reviewers", reviewerId);
       await setDoc(
         reviewerRef,
         {
@@ -263,74 +326,58 @@ export default function EditReviewers() {
     }
   };
 
-  // Delete a reviewer from Firestore.
-  const handleDelete = async (id) => {
+  /**
+   * Deletes a reviewer from Firestore and updates the local state.
+   *
+   * @param {string} reviewerId - The Firestore document ID of the reviewer.
+   */
+  const deleteReviewer = async (reviewerId) => {
     try {
-      const reviewerRef = doc(db, "Reviewers", id);
+      const reviewerRef = doc(db, "Reviewers", reviewerId);
       await deleteDoc(reviewerRef);
-      setReviewers((prevReviewers) =>
-        prevReviewers.filter((r) => r.id !== id)
-      );
+      setReviewers((prev) => prev.filter((r) => r.id !== reviewerId));
       console.log("Reviewer deleted successfully!");
     } catch (error) {
       console.error("Error deleting reviewer:", error);
     }
   };
 
-  // Create a new reviewer in Firestore.
-  // Only Channel Name is required; if youtubeChannelId is provided it is used as the document key,
-  // otherwise an auto-generated key is used.
-  // After creation, the new reviewer is added to the state so it displays immediately.
-  const handleCreate = async () => {
-    if (!newReviewer.channelName) {
-      alert("Channel Name is required to add a new reviewer.");
-      return;
-    }
-    try {
-      const reviewerDoc = newReviewer.youtubeChannelId
-        ? doc(db, "Reviewers", newReviewer.youtubeChannelId)
-        : doc(collection(db, "Reviewers"));
-      await setDoc(reviewerDoc, {
-        channelName: newReviewer.channelName,
-        lastVideoChecked: newReviewer.lastVideoChecked,
-        avatarUrl: newReviewer.avatarUrl,
-        webUrl: newReviewer.webUrl,
-        youtubeChannelId: newReviewer.youtubeChannelId,
-      });
-      console.log("Reviewer created successfully!");
-      const createdReviewer = {
-        id: reviewerDoc.id,
-        ...newReviewer,
-      };
-      setReviewers((prev) => [...prev, createdReviewer]);
-      setNewReviewer({
-        channelName: "",
-        lastVideoChecked: "",
-        avatarUrl: "",
-        webUrl: "",
-        youtubeChannelId: "",
-      });
-      setShowCreateForm(false);
-    } catch (error) {
-      console.error("Error creating reviewer:", error);
-    }
+  /**
+   * Handler for pagination page changes.
+   *
+   * @param {object} data - Pagination data containing the selected page index.
+   */
+  const handlePageClick = (data) => {
+    setCurrentPage(data.selected);
   };
+
+  /**
+   * Updates a single field for a reviewer in the local state.
+   *
+   * @param {string} reviewerId - The Firestore document ID of the reviewer.
+   * @param {string} fieldName - The field name to update.
+   * @param {string} newValue - The new value for the field.
+   */
+  const updateReviewerField = (reviewerId, fieldName, newValue) => {
+    setReviewers((prev) =>
+      prev.map((r) => (r.id === reviewerId ? { ...r, [fieldName]: newValue } : r))
+    );
+  };
+
+  // ------------------ UI Rendering ------------------
 
   return (
     <Layout>
       <div className="p-6 flex flex-col items-center justify-center min-h-screen">
         <h1 className="text-2xl font-bold">Edit Reviewers</h1>
 
-        {/* Search box */}
+        {/* Search Box */}
         <div className="relative mt-4">
           <input
             type="text"
             placeholder="Search by name..."
             value={searchTerm}
-            onChange={(e) => {
-              setSearchTerm(e.target.value);
-              setCurrentPage(0);
-            }}
+            onChange={handleSearchTermChange}
             className="custom-input pr-8"
           />
           {searchTerm && (
@@ -372,6 +419,7 @@ export default function EditReviewers() {
               className="reviewer-card p-4 border rounded-lg shadow-md flex flex-col items-center justify-center"
             >
               <div className="space-y-4 w-full">
+                {/* Avatar Image */}
                 <div className="text-center">
                   <img
                     src={reviewer.avatarUrl}
@@ -383,6 +431,7 @@ export default function EditReviewers() {
                     }}
                   />
                 </div>
+                {/* Channel Name */}
                 <div className="flex flex-col items-center justify-center">
                   <label className="block text-sm font-medium text-gray-700">
                     Channel Name
@@ -391,15 +440,12 @@ export default function EditReviewers() {
                     type="text"
                     value={reviewer.channelName || ""}
                     onChange={(e) =>
-                      updateLocalReviewerValue(
-                        reviewer.id,
-                        "channelName",
-                        e.target.value
-                      )
+                      updateReviewerField(reviewer.id, "channelName", e.target.value)
                     }
                     className="custom-input"
                   />
                 </div>
+                {/* Avatar URL */}
                 <div className="flex flex-col items-center justify-center">
                   <label className="block text-sm font-medium text-gray-700">
                     Avatar URL
@@ -408,15 +454,12 @@ export default function EditReviewers() {
                     type="text"
                     value={reviewer.avatarUrl || ""}
                     onChange={(e) =>
-                      updateLocalReviewerValue(
-                        reviewer.id,
-                        "avatarUrl",
-                        e.target.value
-                      )
+                      updateReviewerField(reviewer.id, "avatarUrl", e.target.value)
                     }
                     className="custom-input"
                   />
                 </div>
+                {/* Firebase Document ID */}
                 <div className="flex flex-col items-center justify-center">
                   <label className="block text-sm font-medium text-gray-700">
                     Firebase ID
@@ -428,6 +471,7 @@ export default function EditReviewers() {
                     className="custom-input"
                   />
                 </div>
+                {/* Web URL */}
                 <div className="flex flex-col items-center justify-center">
                   <label className="block text-sm font-medium text-gray-700">
                     Web URL
@@ -436,15 +480,12 @@ export default function EditReviewers() {
                     type="text"
                     value={reviewer.webUrl || ""}
                     onChange={(e) =>
-                      updateLocalReviewerValue(
-                        reviewer.id,
-                        "webUrl",
-                        e.target.value
-                      )
+                      updateReviewerField(reviewer.id, "webUrl", e.target.value)
                     }
                     className="custom-input"
                   />
                 </div>
+                {/* YouTube Channel ID */}
                 <div className="flex flex-col items-center justify-center">
                   <label className="block text-sm font-medium text-gray-700">
                     YouTube Channel ID
@@ -456,6 +497,7 @@ export default function EditReviewers() {
                     className="custom-input"
                   />
                 </div>
+                {/* Last Video Checked */}
                 <div className="flex flex-col items-center justify-center">
                   <label className="block text-sm font-medium text-gray-700">
                     Last Video Checked
@@ -464,24 +506,21 @@ export default function EditReviewers() {
                     type="text"
                     value={reviewer.lastVideoChecked || ""}
                     onChange={(e) =>
-                      updateLocalReviewerValue(
-                        reviewer.id,
-                        "lastVideoChecked",
-                        e.target.value
-                      )
+                      updateReviewerField(reviewer.id, "lastVideoChecked", e.target.value)
                     }
                     className="custom-input"
                   />
                 </div>
+                {/* Action Buttons */}
                 <div className="flex space-x-3 mt-4 justify-center">
                   <button
-                    onClick={() => handleUpdate(reviewer.id)}
+                    onClick={() => updateReviewerInFirestore(reviewer.id)}
                     className="custom-button bg-indigo-600 hover:bg-indigo-700"
                   >
                     Update
                   </button>
                   <button
-                    onClick={() => handleDelete(reviewer.id)}
+                    onClick={() => deleteReviewer(reviewer.id)}
                     className="custom-button bg-red-600 hover:bg-red-700"
                   >
                     Delete
@@ -493,16 +532,16 @@ export default function EditReviewers() {
                     Visit Website
                   </button>
                 </div>
-                {/* New buttons for existing entries */}
+                {/* Extra Buttons for Existing Reviewer */}
                 <div className="flex space-x-3 mt-2 justify-center">
                   <button
-                    onClick={() => handleExtractChannelIDForReviewer(reviewer.id)}
+                    onClick={() => extractChannelIdForExistingReviewer(reviewer.id)}
                     className="custom-button bg-yellow-600 hover:bg-yellow-700"
                   >
                     Extract Channel ID
                   </button>
                   <button
-                    onClick={() => handleFetchVideosForReviewer(reviewer.id)}
+                    onClick={() => fetchVideosForExistingReviewer(reviewer.id)}
                     className="custom-button bg-teal-600 hover:bg-teal-700"
                     disabled={isFetchingVideos}
                   >
@@ -514,7 +553,7 @@ export default function EditReviewers() {
           ))}
         </div>
 
-        {/* Button to show the create form */}
+        {/* Button to open Create Reviewer Form */}
         <div className="mt-6">
           <button
             onClick={() => setShowCreateForm(true)}
@@ -530,82 +569,69 @@ export default function EditReviewers() {
             <div className="p-6 border rounded-lg shadow-md bg-white w-full">
               <h2 className="text-xl font-bold mb-4">Create New Reviewer</h2>
               <div className="space-y-4">
-                {/* Avatar URL input */}
+                {/* New Reviewer Avatar URL */}
                 <div className="flex flex-col items-center justify-center">
                   <label className="block text-sm font-medium text-gray-700">
                     Avatar URL
                   </label>
+                  <img
+                    src={newReviewerData.avatarUrl || DEFAULT_AVATAR}
+                    alt="Avatar Preview"
+                    style={{ width: "3.5rem", height: "3.5rem" }}
+                    className="rounded-full mt-2"
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = DEFAULT_AVATAR;
+                    }}
+                  />
                   <input
                     type="text"
-                    value={newReviewer.avatarUrl}
+                    value={newReviewerData.avatarUrl}
                     onChange={(e) =>
-                      setNewReviewer({
-                        ...newReviewer,
+                      setNewReviewerData({
+                        ...newReviewerData,
                         avatarUrl: e.target.value,
                       })
                     }
                     className="custom-input"
                   />
-                  {newReviewer.avatarUrl && (
-                    <img
-                      src={newReviewer.avatarUrl}
-                      alt="Avatar Preview"
-                      className="w-12 h-12 rounded-full mt-2"
-                      onError={(e) => {
-                        e.target.onerror = null;
-                        e.target.src = DEFAULT_AVATAR;
-                      }}
-                    />
-                  )}
                 </div>
-                {/* Last Video Checked (auto-filled via Fetch Videos) */}
-                <div className="flex flex-col items-center justify-center">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Last Video Checked
-                  </label>
-                  <input
-                    type="text"
-                    value={newReviewer.lastVideoChecked}
-                    disabled
-                    className="custom-input"
-                  />
-                </div>
-                {/* Channel Name input (required) */}
+                {/* New Reviewer Channel Name */}
                 <div className="flex flex-col items-center justify-center">
                   <label className="block text-sm font-medium text-gray-700">
                     Channel Name
                   </label>
                   <input
                     type="text"
-                    value={newReviewer.channelName}
+                    value={newReviewerData.channelName}
                     onChange={(e) =>
-                      setNewReviewer({
-                        ...newReviewer,
+                      setNewReviewerData({
+                        ...newReviewerData,
                         channelName: e.target.value,
                       })
                     }
                     className="custom-input"
                   />
                 </div>
-                {/* Web URL input and button to extract Channel ID */}
+                {/* New Reviewer Web URL and Extract Channel ID Button */}
                 <div className="flex flex-col items-center justify-center relative">
                   <label className="block text-sm font-medium text-gray-700">
                     Web URL
                   </label>
                   <input
                     type="text"
-                    value={newReviewer.webUrl}
-                    onChange={handleWebUrlChange}
+                    value={newReviewerData.webUrl}
+                    onChange={handleNewReviewerWebUrlChange}
                     className="custom-input pr-20"
                   />
                   <button
-                    onClick={handleExtractChannelID}
+                    onClick={extractChannelIdForNewReviewer}
                     className="ml-2 custom-button bg-gray-200 hover:bg-gray-300 text-sm px-2 py-1"
                   >
                     Extract Channel ID
                   </button>
                 </div>
-                {/* Channel ID field with a button to fetch videos */}
+                {/* New Reviewer Channel ID and Fetch Videos Button */}
                 <div className="flex flex-col items-center justify-center">
                   <label className="block text-sm font-medium text-gray-700">
                     Channel ID
@@ -613,12 +639,12 @@ export default function EditReviewers() {
                   <div className="flex items-center">
                     <input
                       type="text"
-                      value={newReviewer.youtubeChannelId}
+                      value={newReviewerData.youtubeChannelId}
                       disabled
                       className="custom-input"
                     />
                     <button
-                      onClick={handleFetchVideos}
+                      onClick={fetchVideosForNewReviewer}
                       className="ml-2 custom-button bg-gray-200 hover:bg-gray-300 text-sm px-2 py-1"
                       disabled={isFetchingVideos}
                     >
@@ -627,9 +653,22 @@ export default function EditReviewers() {
                   </div>
                 </div>
               </div>
+              {/* New Reviewer Last Video Checked */}
+              <div className="flex flex-col items-center justify-center">
+                <label className="block text-sm font-medium text-gray-700">
+                  Last Video Checked
+                </label>
+                <input
+                  type="text"
+                  value={newReviewerData.lastVideoChecked}
+                  disabled
+                  className="custom-input"
+                />
+              </div>
+              {/* Create/Cancel Buttons */}
               <div className="flex space-x-3 mt-4 justify-center">
                 <button
-                  onClick={handleCreate}
+                  onClick={createNewReviewer}
                   className="custom-button bg-green-600 hover:bg-green-700"
                 >
                   Create

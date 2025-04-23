@@ -40,5 +40,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# something
-/src/app/utils/youtube_api_key.js
+# apiKeys.js
+/src/app/utils/apiKeys.js

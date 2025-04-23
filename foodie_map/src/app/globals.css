@@ -34,21 +34,106 @@ body {
 }
 
 body {
-  color: var(--foreground);
   background: var(--background);
+  color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  padding: 0 20px; /* Add some padding to the body */
+  padding: 0 20px;
 }
 
+/* Typography */
 h1 {
   font-size: 2rem;
   font-weight: bold;
   color: var(--foreground);
 }
 
-/* Reviewer Card Styles */
+/* Layout spacing */
+.p-6 {
+  padding: 1.5rem;
+}
+
+.mt-4 {
+  margin-top: 1rem;
+}
+
+.ml-3 {
+  margin-left: 0.75rem;
+}
+
+/* Form container layout */
+.layout-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.layout-container input {
+  width: 100%;
+  margin-top: 5px;
+}
+
+.layout-container button {
+  width: 100%;
+}
+
+/* Input styles */
+.custom-input {
+  background-color: var(--input-background);
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 1rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.custom-input:focus {
+  outline: none;
+  border-color: var(--button-focus-ring);
+  box-shadow: 0 0 5px var(--button-focus-ring);
+}
+
+/* Button base styles */
+.custom-button,
+.custom-button-danger {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  padding: 10px 15px;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: white;
+}
+
+.custom-button {
+  background-color: var(--button-bg);
+}
+
+.custom-button:hover {
+  background-color: var(--button-hover-bg);
+  opacity: 0.9;
+}
+
+.custom-button:focus {
+  outline: none;
+  box-shadow: 0 0 5px var(--button-focus-ring);
+}
+
+.custom-button-danger {
+  background-color: var(--button-danger-bg);
+}
+
+.custom-button-danger:hover {
+  background-color: var(--button-danger-hover-bg);
+}
+
+/* Pagination */
 .pagination {
   display: flex;
   list-style: none;
@@ -73,30 +158,62 @@ h1 {
   background-color: var(--button-hover-bg);
 }
 
-
+/* Card container for centering */
 .card-container {
-  width: 50%;
+  width: 80%; /* Reduce width for a smaller card */
   margin: 0 auto;
   justify-content: center;
+  text-align: center; /* Ensure content inside card is centered */
 }
 
+/* Avatar and channel info styles */
+.channel-info {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+/* Review section styles */
+.reviews-section {
+  margin-top: 2rem;
+}
+
+.wide-review-card {
+  background-color: #f8f9fa;
+  border-radius: 1rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  padding: 1.5rem;
+}
+
+.review-container {
+  display: grid;
+  gap: 1rem;
+}
+
+.review {
+  background-color: #ffffff;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.1);
+}
+
+
+/* Card styling updates */
 .reviewer-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 1rem;
   background: var(--input-background);
   border: 1px solid var(--input-border);
   border-radius: 12px;
-  padding: 1rem;
   transition: box-shadow 0.2s ease-in-out, transform 0.2s ease-in-out;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  max-width: 800px; /* Limit card size */
+  margin: 0 auto; /* Center the card */
 }
 
-.reviewer-card:hover {
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-  transform: scale(1.01);
-}
-
+/* Avatar and image within the card */
 .reviewer-card img {
   width: 50px;
   height: 50px;
@@ -115,7 +232,45 @@ h1 {
   color: gray;
 }
 
-/* Form input styles */
+/* Hover effect for card */
+.reviewer-card:hover {
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  transform: scale(1.01);
+}
+
+/* Video embed size and styling */
+.video-embed {
+  width: 100%; /* Full width to match the card */
+  max-width: 80%; /* Match the card width */
+  margin: 20px auto; /* Center the video horizontally */
+}
+
+.video-embed iframe {
+  width: 100%;
+  height: 700px; /* Make the video larger */
+  border-radius: 8px; /* Optional, to match the card's border radius */
+  border-radius: 20px; /* Rounded corners */
+}
+
+/* Remove margin from the video container */
+.video-embed {
+  display: flex;
+  justify-content: center;
+  margin: 0 auto; /* Center the video horizontally */
+}
+
+/* Styling for the title, publication date */
+.reviewer-card h2,
+.reviewer-card p {
+  margin-bottom: 10px;
+}
+
+.reviewer-card a {
+  font-size: 1rem;
+  color: var(--foreground);
+}
+
+/* Search bar and clear button styling */
 .custom-input {
   background-color: var(--input-background);
   border: 1px solid var(--input-border);
@@ -126,13 +281,6 @@ h1 {
   box-sizing: border-box;
 }
 
-.custom-input:focus {
-  outline: none;
-  border-color: var(--button-focus-ring);
-  box-shadow: 0 0 5px var(--button-focus-ring);
-}
-
-/* Button styles */
 .custom-button {
   display: inline-flex;
   justify-content: center;
@@ -141,12 +289,14 @@ h1 {
   font-size: 1rem;
   font-weight: 600;
   border-radius: 8px;
-  transition: all 0.2s;
-  cursor: pointer;
   border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: white;
 }
 
 .custom-button:hover {
+  background-color: var(--button-hover-bg);
   opacity: 0.9;
 }
 
@@ -155,50 +305,10 @@ h1 {
   box-shadow: 0 0 5px var(--button-focus-ring);
 }
 
-/* Specific button color styles */
-.custom-button {
-  background-color: var(--button-bg);
-  color: white;
-}
-
-.custom-button:hover {
-  background-color: var(--button-hover-bg);
-}
-
 .custom-button-danger {
   background-color: var(--button-danger-bg);
-  color: white;
 }
 
 .custom-button-danger:hover {
   background-color: var(--button-danger-hover-bg);
-}
-
-/* Layout Styles */
-.p-6 {
-  padding: 1.5rem;
-}
-
-.mt-4 {
-  margin-top: 1rem;
-}
-
-.ml-3 {
-  margin-left: 0.75rem;
-}
-
-/* Form Container Styles */
-.layout-container {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.layout-container input {
-  width: 100%;
-  margin-top: 5px;
-}
-
-.layout-container button {
-  width: 100%;
 }

@@ -2,6 +2,7 @@
 import Layout from "../components/Layout";
 import ReactPaginate from "react-paginate";
 import { useState, useEffect } from "react";
+import { searchPlaces } from "../googlePlacesService"; // Import Google Places service
 import { db } from "../firebase";
 import { collection, getDocs } from "firebase/firestore";
 
@@ -38,48 +39,14 @@ export default function EditVideos() {
           ...videoData,
           channelTitle: reviewer.channelName || "Desconocido",
           channelAvatar: reviewer.avatarUrl || "https://via.placeholder.com/48",
-          reviews: [], // Placeholder for reviews to be fetched from Google Places API
         };
       });
 
-      // Fetch reviews for each video from Google Places
-      const enrichedVideos = await Promise.all(
-        videosList.map(async (video) => {
-          const reviews = await fetchReviewsFromGooglePlaces(video.videoId); // Replace with actual identifier
-          return {
-            ...video,
-            reviews, // Add reviews to each video
-          };
-        })
-      );
-
-      setVideos(enrichedVideos);
+      setVideos(videosList);
     };
 
     fetchVideosAndReviewers();
   }, []);
-
-  const fetchReviewsFromGooglePlaces = async (videoId) => {
-    try {
-      const apiKey = "YOUR_GOOGLE_PLACES_API_KEY"; // Replace with your API key
-      const placeId = "PLACE_ID_FOR_VIDEO"; // Replace with the appropriate place ID logic
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&key=${apiKey}`
-      );
-      const data = await response.json();
-
-      // Extract reviews from the response
-      return data.result.reviews.map((review) => ({
-        avatar: review.profile_photo_url,
-        reviewerName: review.author_name,
-        date: new Date(review.time * 1000).toLocaleDateString(), // Convert timestamp to date
-        comment: review.text,
-      }));
-    } catch (error) {
-      console.error("Failed to fetch reviews from Google Places", error);
-      return [];
-    }
-  };
 
   const handleSearchTermChange = (e) => {
     setSearchTerm(e.target.value);
@@ -92,8 +59,10 @@ export default function EditVideos() {
 
   /* Form handling */
   const [formData, setFormData] = useState({
-    restaurantName: "",
+    secondOfReview: "",
+    restaurantDescription: "",
     googlePlaceId: "",
+    restaurantName: "",
     address: "",
     phone: "",
     website: "",
@@ -101,8 +70,27 @@ export default function EditVideos() {
     googleMapsLink: "",
     googleMapsRating: "",
     googleMapsReviewsCount: "",
-    priceLevel: ""
+    priceLevel: "",
+    restaurantImage: "",
+    restaurantStatus: ""
   });
+
+  const [placeSuggestions, setPlaceSuggestions] = useState([]);
+
+  const handleRestaurantSearch = async () => {
+    if (!formData.restaurantName.trim()) {
+      alert("Please enter a restaurant name to search.");
+      return;
+    }
+
+    try {
+      const suggestions = await searchPlaces(formData.restaurantName);
+      setPlaceSuggestions(suggestions);
+    } catch (error) {
+      console.error("Error searching for restaurants:", error);
+      alert("Failed to search for restaurants.");
+    }
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -121,7 +109,7 @@ export default function EditVideos() {
   return (
     <Layout>
       <div className="layout-container p-6">
-        <h1 className="text-center">Edit Videos</h1>
+        <h1 className="text-center text-2xl font-bold mb-6">Edit Videos</h1>
 
         {/* Search bar */}
         <div className="card-container">
@@ -141,12 +129,12 @@ export default function EditVideos() {
 
         {/* No results */}
         {filteredVideos.length === 0 && (
-          <p className="text-center">No videos found.</p>
+          <p className="text-center text-gray-500 mt-4">No videos found.</p>
         )}
 
         {/* Pagination */}
         {pageCount > 1 && (
-          <div>
+          <div className="mt-4">
             <ReactPaginate
               previousLabel={"Previous"}
               nextLabel={"Next"}
@@ -164,11 +152,7 @@ export default function EditVideos() {
         {/* Video card */}
         {currentPageData.map((video) => (
           <div key={video.id} className="reviewer-card mt-4">
-            {/* Avatar and channel info */}
-            <img
-              src={video.channelAvatar}
-              alt="Channel avatar"
-            />
+            <img src={video.channelAvatar} alt="Channel avatar" />
             <div>
               <h2>{video.channelTitle}</h2>
               <a
@@ -207,146 +191,228 @@ export default function EditVideos() {
 
         {/* Reviews Section */}
         <div className="reviews-section mt-6">
-          <h2 className="text-xl font-semibold text-center mb-4">Select a Review</h2>
-
-          {currentPageData.map((video) => (
-            <div key={video.id} className="wide-review-card bg-gray-100 rounded-xl shadow-md p-4 mx-auto max-w-4xl">
-              <h3 className="text-lg font-bold mb-4">{video.title}</h3>
-              <form onSubmit={handleSubmit}>
-                <div className="form-group mb-4">
-                  <label htmlFor="restaurantName" className="block text-sm font-semibold">Restaurant Name</label>
-                  <input
-                    type="text"
-                    id="restaurantName"
-                    name="restaurantName"
-                    value={formData.restaurantName}
-                    onChange={handleInputChange}
-                    className="input-field"
-                    placeholder="Enter restaurant name"
-                  />
-                </div>
-
-                <div className="form-group mb-4">
-                  <label htmlFor="googlePlaceId" className="block text-sm font-semibold">Google Place ID</label>
-                  <input
-                    type="text"
-                    id="googlePlaceId"
-                    name="googlePlaceId"
-                    value={formData.googlePlaceId}
-                    onChange={handleInputChange}
-                    className="input-field"
-                    placeholder="Enter Google Place ID"
-                  />
-                </div>
-
-                <div className="form-group mb-4">
-                  <label htmlFor="address" className="block text-sm font-semibold">Address</label>
-                  <input
-                    type="text"
-                    id="address"
-                    name="address"
-                    value={formData.address}
-                    onChange={handleInputChange}
-                    className="input-field"
-                    placeholder="Enter restaurant address"
-                  />
-                </div>
-
-                <div className="form-group mb-4">
-                  <label htmlFor="phone" className="block text-sm font-semibold">Phone</label>
-                  <input
-                    type="tel"
-                    id="phone"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleInputChange}
-                    className="input-field"
-                    placeholder="Enter restaurant phone"
-                  />
-                </div>
-
-                <div className="form-group mb-4">
-                  <label htmlFor="website" className="block text-sm font-semibold">Website</label>
-                  <input
-                    type="url"
-                    id="website"
-                    name="website"
-                    value={formData.website}
-                    onChange={handleInputChange}
-                    className="input-field"
-                    placeholder="Enter website URL"
-                  />
-                </div>
-
-                <div className="form-group mb-4">
-                  <label htmlFor="tripAdvisorLink" className="block text-sm font-semibold">TripAdvisor Link</label>
-                  <input
-                    type="url"
-                    id="tripAdvisorLink"
-                    name="tripAdvisorLink"
-                    value={formData.tripAdvisorLink}
-                    onChange={handleInputChange}
-                    className="input-field"
-                    placeholder="Enter TripAdvisor link"
-                  />
-                </div>
-
-                <div className="form-group mb-4">
-                  <label htmlFor="googleMapsLink" className="block text-sm font-semibold">Google Maps Link</label>
-                  <input
-                    type="url"
-                    id="googleMapsLink"
-                    name="googleMapsLink"
-                    value={formData.googleMapsLink}
-                    onChange={handleInputChange}
-                    className="input-field"
-                    placeholder="Enter Google Maps link"
-                  />
-                </div>
-
-                <div className="form-group mb-4">
-                  <label htmlFor="googleMapsRating" className="block text-sm font-semibold">Google Maps Rating</label>
-                  <input
-                    type="number"
-                    id="googleMapsRating"
-                    name="googleMapsRating"
-                    value={formData.googleMapsRating}
-                    onChange={handleInputChange}
-                    className="input-field"
-                    placeholder="Enter Google Maps rating"
-                  />
-                </div>
-
-                <div className="form-group mb-4">
-                  <label htmlFor="googleMapsReviewsCount" className="block text-sm font-semibold">Reviews Count</label>
-                  <input
-                    type="number"
-                    id="googleMapsReviewsCount"
-                    name="googleMapsReviewsCount"
-                    value={formData.googleMapsReviewsCount}
-                    onChange={handleInputChange}
-                    className="input-field"
-                    placeholder="Enter Google Maps reviews count"
-                  />
-                </div>
-
-                <div className="form-group mb-4">
-                  <label htmlFor="priceLevel" className="block text-sm font-semibold">Price Level</label>
-                  <input
-                    type="number"
-                    id="priceLevel"
-                    name="priceLevel"
-                    value={formData.priceLevel}
-                    onChange={handleInputChange}
-                    className="input-field"
-                    placeholder="Enter price level"
-                  />
-                </div>
-
-                <button type="submit" className="submit-button">Submit</button>
-              </form>
+          <h2 className="text-xl font-semibold text-center mb-6">Restaurant Details</h2>
+          <form onSubmit={handleSubmit} className="space-y-6 max-w-lg mx-auto bg-white p-6 rounded-lg shadow-md">
+            <div className="form-group">
+              <label htmlFor="restaurantName" className="block text-sm font-semibold mb-2">
+                Restaurant Name
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  id="restaurantName"
+                  name="restaurantName"
+                  value={formData.restaurantName}
+                  onChange={handleInputChange}
+                  className="custom-input"
+                  placeholder="Enter restaurant name"
+                />
+                <button
+                  type="button"
+                  onClick={handleRestaurantSearch}
+                  className="custom-button bg-blue-500 text-white"
+                >
+                  Search
+                </button>
+              </div>
+              {placeSuggestions.length > 0 && (
+                <ul className="dropdown bg-white border rounded shadow-md mt-2">
+                  {placeSuggestions.map((place) => (
+                    <li
+                      key={place.id}
+                      className="p-2 hover:bg-gray-100 cursor-pointer"
+                    >
+                      {place.displayName}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
-          ))}
+
+            <div className="form-group">
+              <label htmlFor="address" className="block text-sm font-semibold mb-2">
+                Address
+              </label>
+              <input
+                type="text"
+                id="address"
+                name="address"
+                value={formData.address}
+                onChange={handleInputChange}
+                className="custom-input"
+                placeholder="Enter restaurant address"
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="phone" className="block text-sm font-semibold mb-2">
+                Phone
+              </label>
+              <input
+                type="tel"
+                id="phone"
+                name="phone"
+                value={formData.phone}
+                onChange={handleInputChange}
+                className="custom-input"
+                placeholder="Enter restaurant phone"
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="website" className="block text-sm font-semibold mb-2">
+                Website
+              </label>
+              <input
+                type="url"
+                id="website"
+                name="website"
+                value={formData.website}
+                onChange={handleInputChange}
+                className="custom-input"
+                placeholder="Enter website URL"
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="tripAdvisorLink" className="block text-sm font-semibold mb-2">
+                TripAdvisor Link
+              </label>
+              <input
+                type="url"
+                id="tripAdvisorLink"
+                name="tripAdvisorLink"
+                value={formData.tripAdvisorLink}
+                onChange={handleInputChange}
+                className="custom-input"
+                placeholder="Enter TripAdvisor link"
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="googleMapsLink" className="block text-sm font-semibold mb-2">
+                Google Maps Link
+              </label>
+              <input
+                type="url"
+                id="googleMapsLink"
+                name="googleMapsLink"
+                value={formData.googleMapsLink}
+                onChange={handleInputChange}
+                className="custom-input"
+                placeholder="Enter Google Maps link"
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="googleMapsRating" className="block text-sm font-semibold mb-2">
+                Google Maps Rating
+              </label>
+              <input
+                type="number"
+                id="googleMapsRating"
+                name="googleMapsRating"
+                value={formData.googleMapsRating}
+                onChange={handleInputChange}
+                className="custom-input"
+                placeholder="Enter Google Maps rating"
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="googleMapsReviewsCount" className="block text-sm font-semibold mb-2">
+                Google Maps Reviews Count
+              </label>
+              <input
+                type="number"
+                id="googleMapsReviewsCount"
+                name="googleMapsReviewsCount"
+                value={formData.googleMapsReviewsCount}
+                onChange={handleInputChange}
+                className="custom-input"
+                placeholder="Enter Google Maps reviews count"
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="priceLevel" className="block text-sm font-semibold mb-2">
+                Price Level
+              </label>
+              <input
+                type="number"
+                id="priceLevel"
+                name="priceLevel"
+                value={formData.priceLevel}
+                onChange={handleInputChange}
+                className="custom-input"
+                placeholder="Enter price level"
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="restaurantImage" className="block text-sm font-semibold mb-2">
+                Restaurant Image
+              </label>
+              <input
+                type="text"
+                id="restaurantImage"
+                name="restaurantImage"
+                value={formData.restaurantImage}
+                onChange={handleInputChange}
+                className="custom-input"
+                placeholder="Enter restaurant image URL"
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="restaurantStatus" className="block text-sm font-semibold mb-2">
+                Restaurant Status
+              </label>
+              <input
+                type="text"
+                id="restaurantStatus"
+                name="restaurantStatus"
+                value={formData.restaurantStatus}
+                onChange={handleInputChange}
+                className="custom-input"
+                placeholder="Enter restaurant status"
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="secondOfReview" className="block text-sm font-semibold mb-2">
+                Second of the Review
+              </label>
+              <input
+                type="text"
+                id="secondOfReview"
+                name="secondOfReview"
+                value={formData.secondOfReview}
+                onChange={handleInputChange}
+                className="custom-input"
+                placeholder="Enter second when the review begins"
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="restaurantDescription" className="block text-sm font-semibold mb-2">
+                Restaurant Description
+              </label>
+              <textarea
+                id="restaurantDescription"
+                name="restaurantDescription"
+                value={formData.restaurantDescription}
+                onChange={handleInputChange}
+                className="custom-input"
+                placeholder="Enter restaurant description"
+                rows="3"
+              ></textarea>
+            </div>
+
+            <button type="submit" className="custom-button bg-green-500 text-white w-full py-2 rounded-lg">
+              Submit
+            </button>
+          </form>
         </div>
       </div>
     </Layout>

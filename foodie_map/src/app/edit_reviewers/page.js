@@ -2,11 +2,12 @@
 import Layout from "../components/Layout";
 import ReactPaginate from "react-paginate";
 import { useState, useEffect } from "react";
-import { YOUTUBE_API_KEY } from "../utils/apiKeys"; // Your YouTube API key
+import apiKeys from "../utils/apiKeys"; // Your YouTube API key
 import { db } from "../firebase"; // Firebase configuration
 import { collection, getDocs, doc, setDoc, deleteDoc } from "firebase/firestore";
 import "../globals.css";
 
+const { YOUTUBE_API_KEY } = apiKeys; // Import the API key from your config file
 // Default avatar URL if no image is provided
 const DEFAULT_AVATAR = "https://th.bing.com/th/id/R.0ababdb27dd0bb71f21f03c98b6cd6f1?rik=%2fiVDxahrgNztPA&pid=ImgRaw&r=0";
 

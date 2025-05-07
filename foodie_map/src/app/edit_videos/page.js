@@ -2,7 +2,9 @@
 import Layout from "../components/Layout";
 import ReactPaginate from "react-paginate";
 import { useState, useEffect } from "react";
-import { searchPlaces } from "../googlePlacesService"; // Import Google Places service
+import { searchPlaces } from "../googlePlacesService";
+import { getPlaceDetails } from "../googlePlacesService";
+
 import { db } from "../firebase";
 import { collection, getDocs } from "firebase/firestore";
 
@@ -75,22 +77,23 @@ export default function EditVideos() {
     restaurantStatus: ""
   });
 
-  const [placeSuggestions, setPlaceSuggestions] = useState([]);
-
-  const handleRestaurantSearch = async () => {
+  const handleSearchClick = async () => {
     if (!formData.restaurantName.trim()) {
-      alert("Please enter a restaurant name to search.");
+      window.alert("Please enter a restaurant name before searching.");
       return;
     }
-
+  
     try {
-      const suggestions = await searchPlaces(formData.restaurantName);
-      setPlaceSuggestions(suggestions);
+      const results = await searchPlaces(formData.restaurantName);
+      console.log("Search results:", results);
+      setPlaceSuggestions(results);
     } catch (error) {
-      console.error("Error searching for restaurants:", error);
-      alert("Failed to search for restaurants.");
+      console.error("Error fetching places:", error);
+      setPlaceSuggestions([]);
     }
-  };
+  };  
+
+  const [placeSuggestions, setPlaceSuggestions] = useState([]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -99,6 +102,27 @@ export default function EditVideos() {
       [name]: value
     }));
   };
+
+  const getPlaceDetails = async (placeId) => {
+    const response = await fetch(/* your API request to Google */);
+    const data = await response.json();
+    const place = data.result; // or however it's structured
+  
+    return {
+      formattedAddress: place.formatted_address,
+      phoneNumber: place.formatted_phone_number,
+      websiteUri: place.website,
+      googleMapsUri: place.url,
+      rating: place.rating,
+      userRatingCount: place.user_ratings_total,
+      priceLevel: place.price_level,
+      businessStatus: place.business_status,
+      photos: place.photos?.map(photo => ({
+        googleUrl: `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${photo.photo_reference}&key=YOUR_API_KEY`
+      }))
+    };
+  };
+  
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -209,7 +233,7 @@ export default function EditVideos() {
                 />
                 <button
                   type="button"
-                  onClick={handleRestaurantSearch}
+                  onClick={handleSearchClick}
                   className="custom-button bg-blue-500 text-white"
                 >
                   Search
@@ -217,16 +241,64 @@ export default function EditVideos() {
               </div>
               {placeSuggestions.length > 0 && (
                 <ul className="dropdown bg-white border rounded shadow-md mt-2">
-                  {placeSuggestions.map((place) => (
+                  {placeSuggestions.map((place, index) => (
                     <li
-                      key={place.id}
+                      key={index}
                       className="p-2 hover:bg-gray-100 cursor-pointer"
+                      onClick={() => {
+                        setFormData((prevData) => ({
+                          ...prevData,
+                          restaurantName: place.displayName?.text || place.name?.text || "",
+                          googlePlaceId: place.id || ""
+                        }));
+                        setPlaceSuggestions([]); // close dropdown after selection
+                      }}                      
                     >
-                      {place.displayName}
+                      {place.displayName?.text || place.name?.text || "Unknown Place"}
                     </li>
                   ))}
                 </ul>
               )}
+            </div>
+
+            <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  id="restaurantName"
+                  name="restaurantName"
+                  value={formData.googlePlaceId}
+                  onChange={handleInputChange}
+                  className="custom-input"
+                  placeholder="Enter GooglePlaceId"
+                />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const details = await getPlaceDetails(formData.googlePlaceId);
+                      console.log("Place details:", details);
+                  
+                      setFormData((prevData) => ({
+                        ...prevData,
+                        address: details.formattedAddress || "",
+                        phone: details.phoneNumber || "",
+                        website: details.websiteUri || "",
+                        googleMapsLink: details.googleMapsUri || "",
+                        googleMapsRating: details.rating || "",
+                        googleMapsReviewsCount: details.userRatingCount || "",
+                        priceLevel: details.priceLevel || "",
+                        restaurantImage: details.photos?.[0]?.googleUrl || "", // assumes photos is an array
+                        restaurantStatus: details.businessStatus || ""
+                      }));
+                    } catch (error) {
+                      console.error("Failed to get place details:", error);
+                      alert("Failed to retrieve place details. Check the Place ID.");
+                    }
+                  }}                  
+                  className="custom-button bg-blue-500 text-white"
+                >
+                  Get Details
+              </button>
             </div>
 
             <div className="form-group">

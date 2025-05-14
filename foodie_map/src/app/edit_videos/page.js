@@ -60,22 +60,24 @@ export default function EditVideos() {
   };
 
   /* Form handling */
-  const [formData, setFormData] = useState({
-    secondOfReview: "",
-    restaurantDescription: "",
-    googlePlaceId: "",
-    restaurantName: "",
-    address: "",
-    phone: "",
-    website: "",
-    tripAdvisorLink: "",
-    googleMapsLink: "",
-    googleMapsRating: "",
-    googleMapsReviewsCount: "",
-    priceLevel: "",
-    restaurantImage: "",
-    restaurantStatus: ""
-  });
+  const [formData, setformData] = useState([
+    {
+      secondOfReview: "",
+      restaurantDescription: "",
+      googlePlaceId: "",
+      restaurantName: "",
+      address: "",
+      phone: "",
+      website: "",
+      tripAdvisorLink: "",
+      googleMapsLink: "",
+      googleMapsRating: "",
+      googleMapsReviewsCount: "",
+      priceLevel: "",
+      restaurantImage: "",
+      restaurantStatus: ""
+    }
+  ]);  
 
   const handleSearchClick = async () => {
     if (!formData.restaurantName.trim()) {
@@ -93,15 +95,20 @@ export default function EditVideos() {
     }
   };  
 
+  const [activeReviewIndex, setActiveReviewIndex] = useState(0);
   const [placeSuggestions, setPlaceSuggestions] = useState([]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prevData) => ({
-      ...prevData,
-      [name]: value
-    }));
-  };
+    setformData((prevList) => {
+      const updatedList = [...prevList];
+      updatedList[activeReviewIndex] = {
+        ...updatedList[activeReviewIndex],
+        [name]: value
+      };
+      return updatedList;
+    });
+  };  
 
   const handlePlaceDetailsFetch = async () => {
     if (!formData.googlePlaceId) {
@@ -222,7 +229,59 @@ export default function EditVideos() {
 
         {/* Reviews Section */}
         <div className="reviews-section mt-6">
-          <h2 className="text-xl font-semibold text-center mb-6">Restaurant Details</h2>
+        <h2 className="text-xl font-semibold text-center mb-6">Restaurant Details</h2>
+        <div className="flex flex-wrap gap-4 justify-center items-center mt-6">
+          <button
+            type="button"
+            className="custom-button"
+            disabled={activeReviewIndex === 0}
+            onClick={() => setActiveReviewIndex(activeReviewIndex - 1)}
+          >
+            Previous Review
+          </button>
+
+          <span>
+            Review {activeReviewIndex + 1} of {formData.length}
+          </span>
+
+          <button
+            type="button"
+            className="custom-button"
+            disabled={activeReviewIndex === formData.length - 1}
+            onClick={() => setActiveReviewIndex(activeReviewIndex + 1)}
+          >
+            Next Review
+          </button>
+
+          <button
+            type="button"
+            className="custom-button"
+            onClick={() =>
+              setformData([
+                ...formData,
+                {
+                  secondOfReview: "",
+                  restaurantDescription: "",
+                  googlePlaceId: "",
+                  restaurantName: "",
+                  address: "",
+                  phone: "",
+                  website: "",
+                  tripAdvisorLink: "",
+                  googleMapsLink: "",
+                  googleMapsRating: "",
+                  googleMapsReviewsCount: "",
+                  priceLevel: "",
+                  restaurantImage: "",
+                  restaurantStatus: ""
+                }
+              ])
+            }
+          >
+            + Add Another Review
+          </button>
+        </div>
+
           <form onSubmit={handleSubmit} className="space-y-6 max-w-lg mx-auto bg-white p-6 rounded-lg shadow-md">
             <div className="form-group">
               <label htmlFor="restaurantName" className="block text-sm font-semibold mb-2">

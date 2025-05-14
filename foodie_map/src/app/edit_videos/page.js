@@ -103,26 +103,33 @@ export default function EditVideos() {
     }));
   };
 
-  const getPlaceDetails = async (placeId) => {
-    const response = await fetch(/* your API request to Google */);
-    const data = await response.json();
-    const place = data.result; // or however it's structured
+  const handlePlaceDetailsFetch = async () => {
+    if (!formData.googlePlaceId) {
+      console.warn("Google Place ID is missing. Skipping fetch.");
+      return;
+    }
   
-    return {
-      formattedAddress: place.formatted_address,
-      phoneNumber: place.formatted_phone_number,
-      websiteUri: place.website,
-      googleMapsUri: place.url,
-      rating: place.rating,
-      userRatingCount: place.user_ratings_total,
-      priceLevel: place.price_level,
-      businessStatus: place.business_status,
-      photos: place.photos?.map(photo => ({
-        googleUrl: `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${photo.photo_reference}&key=YOUR_API_KEY`
-      }))
-    };
+    try {
+      const details = await getPlaceDetails(formData.googlePlaceId); // Use the imported function
+      console.log("Place details:", details);
+  
+      setFormData((prevData) => ({
+        ...prevData,
+        address: details.formattedAddress || "",
+        phone: details.internationalPhoneNumber || "",
+        website: details.websiteUri || "",
+        googleMapsLink: details.googleMapsUri || "",
+        googleMapsRating: details.rating || "",
+        googleMapsReviewsCount: details.userRatingCount || "",
+        priceLevel: details.priceLevel || "",
+        restaurantImage: details.photos?.[0]?.googleUrl || "",
+        restaurantStatus: details.businessStatus || "",
+      }));
+    } catch (error) {
+      console.error("Failed to get place details:", error);
+      alert("Failed to retrieve place details. Check the Place ID.");
+    }
   };
-  
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -273,32 +280,11 @@ export default function EditVideos() {
                 />
                 <button
                   type="button"
-                  onClick={async () => {
-                    try {
-                      const details = await getPlaceDetails(formData.googlePlaceId);
-                      console.log("Place details:", details);
-                  
-                      setFormData((prevData) => ({
-                        ...prevData,
-                        address: details.formattedAddress || "",
-                        phone: details.phoneNumber || "",
-                        website: details.websiteUri || "",
-                        googleMapsLink: details.googleMapsUri || "",
-                        googleMapsRating: details.rating || "",
-                        googleMapsReviewsCount: details.userRatingCount || "",
-                        priceLevel: details.priceLevel || "",
-                        restaurantImage: details.photos?.[0]?.googleUrl || "", // assumes photos is an array
-                        restaurantStatus: details.businessStatus || ""
-                      }));
-                    } catch (error) {
-                      console.error("Failed to get place details:", error);
-                      alert("Failed to retrieve place details. Check the Place ID.");
-                    }
-                  }}                  
+                  onClick={handlePlaceDetailsFetch}
                   className="custom-button bg-blue-500 text-white"
                 >
-                  Get Details
-              </button>
+                  Fetch Details
+                </button>
             </div>
 
             <div className="form-group">
@@ -419,6 +405,21 @@ export default function EditVideos() {
                 className="custom-input"
                 placeholder="Enter price level"
               />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="googleMapsLink" className="block text-sm font-semibold mb-2">
+                Google Maps Location
+              </label>
+              {formData.googleMapsLink && (
+                <iframe
+                  className="w-full h-64 rounded-lg shadow-md"
+                  src={formData.googleMapsLink}
+                  allowFullScreen
+                  loading="lazy"
+                  title="Google Maps Location"
+                ></iframe>
+              )}
             </div>
 
             <div className="form-group">

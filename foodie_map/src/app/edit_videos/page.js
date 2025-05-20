@@ -6,7 +6,9 @@ import { searchPlaces } from "../googlePlacesService";
 import { getPlaceDetails } from "../googlePlacesService";
 
 import { db } from "../firebase";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, doc, updateDoc, getDoc } from "firebase/firestore";
+import MapComponent from "../components/MapComponent";
+import "leaflet/dist/leaflet.css";
 
 export default function EditVideos() {
   const [videos, setVideos] = useState([]);
@@ -80,13 +82,14 @@ export default function EditVideos() {
   ]);  
 
   const handleSearchClick = async () => {
-    if (!formData.restaurantName.trim()) {
+    const restaurantName = formData[activeReviewIndex]?.restaurantName?.trim();
+    if (!restaurantName) {
       window.alert("Please enter a restaurant name before searching.");
       return;
     }
   
     try {
-      const results = await searchPlaces(formData.restaurantName);
+      const results = await searchPlaces(restaurantName);
       console.log("Search results:", results);
       setPlaceSuggestions(results);
     } catch (error) {
@@ -111,38 +114,127 @@ export default function EditVideos() {
   };  
 
   const handlePlaceDetailsFetch = async () => {
-    if (!formData.googlePlaceId) {
+    const googlePlaceId = formData[activeReviewIndex]?.googlePlaceId?.trim();
+    if (!googlePlaceId) {
       console.warn("Google Place ID is missing. Skipping fetch.");
       return;
     }
   
     try {
-      const details = await getPlaceDetails(formData.googlePlaceId); // Use the imported function
+      const details = await getPlaceDetails(googlePlaceId); // Use the imported function
       console.log("Place details:", details);
   
-      setFormData((prevData) => ({
-        ...prevData,
-        address: details.formattedAddress || "",
-        phone: details.internationalPhoneNumber || "",
-        website: details.websiteUri || "",
-        googleMapsLink: details.googleMapsUri || "",
-        googleMapsRating: details.rating || "",
-        googleMapsReviewsCount: details.userRatingCount || "",
-        priceLevel: details.priceLevel || "",
-        restaurantImage: details.photos?.[0]?.googleUrl || "",
-        restaurantStatus: details.businessStatus || "",
-      }));
+      setformData((prevList) => {
+        const updatedList = [...prevList];
+        updatedList[activeReviewIndex] = {
+          ...updatedList[activeReviewIndex],
+          address: details.formattedAddress || "",
+          phone: details.internationalPhoneNumber || "",
+          website: details.websiteUri || "",
+          googleMapsLink: details.googleMapsUri || "",
+          googleMapsRating: details.rating || "",
+          googleMapsReviewsCount: details.userRatingCount || "",
+          priceLevel: details.priceLevel || "",
+          restaurantImage: details.photos?.[0]?.googleUrl || "",
+          restaurantStatus: details.businessStatus || "",
+        };
+        return updatedList;
+      });
     } catch (error) {
       console.error("Failed to get place details:", error);
       alert("Failed to retrieve place details. Check the Place ID.");
     }
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    // Handle form submission logic here (e.g., saving to the database or sending an API request)
-    console.log("Form data submitted:", formData);
+  const handleSaveToFirebase = async () => {
+    try {
+      const selectedVideoId = currentPageData[0]?.videoId; // Dynamically get the video ID from the current page data
+      if (!selectedVideoId) {
+        alert("No video ID found. Please ensure a video is selected.");
+        return;
+      }
+  
+      const videoRef = doc(db, "VideosToEdit", selectedVideoId);
+  
+      // Fetch existing reviews from Firestore
+      const videoSnapshot = await getDoc(videoRef);
+      let existingReviews = [];
+      if (videoSnapshot.exists() && videoSnapshot.data().reviews) {
+        existingReviews = videoSnapshot.data().reviews;
+      }
+  
+      // Merge existing reviews with new reviews, ensuring restaurantName and googlePlaceId are included
+      const updatedReviews = [
+        ...existingReviews,
+        ...formData.map((review) => ({
+          ...review,
+          restaurantName: review.restaurantName || "Unknown Restaurant", // Default value if empty
+          googlePlaceId: review.googlePlaceId || "Unknown Place ID" // Default value if empty
+        }))
+      ];
+  
+      // Save the merged reviews array to Firestore
+      await updateDoc(videoRef, {
+        reviews: updatedReviews
+      });
+  
+      alert("Data saved successfully to Firebase!");
+    } catch (error) {
+      console.error("Error saving data to Firebase:", error);
+      alert("Failed to save data to Firebase.");
+    }
   };
+
+  const loadReviewDataFromFirebase = async (reviewIndex) => {
+    try {
+      const selectedVideoId = currentPageData[0]?.videoId; // Dynamically get the video ID from the current page data
+      if (!selectedVideoId) {
+        alert("No video ID found. Please ensure a video is selected.");
+        return;
+      }
+  
+      const videoRef = doc(db, "VideosToEdit", selectedVideoId);
+      const videoSnapshot = await getDoc(videoRef);
+  
+      if (videoSnapshot.exists()) {
+        const videoData = videoSnapshot.data();
+  
+        // Check if the "reviews" field exists
+        if (videoData.reviews && Array.isArray(videoData.reviews)) {
+          const reviewData = videoData.reviews[reviewIndex];
+          if (reviewData) {
+            setformData((prevFormData) => {
+              const updatedFormData = [...prevFormData];
+              updatedFormData[reviewIndex] = reviewData; // Update only the selected review
+              return updatedFormData;
+            });
+          } else {
+            console.warn(`No review found at index ${reviewIndex}.`);
+          }
+        } else {
+          console.warn("No reviews found for this video.");
+        }
+      } else {
+        console.warn("Video not found in Firebase.");
+      }
+    } catch (error) {
+      console.error("Error loading review data from Firebase:", error);
+      alert("Failed to load review data. Please try again.");
+    }
+  };
+  
+  // Trigger reload when activeReviewIndex changes
+  useEffect(() => {
+    if (currentPageData.length > 0 && activeReviewIndex >= 0) {
+      loadReviewDataFromFirebase(activeReviewIndex);
+    }
+  }, [currentPageData, activeReviewIndex]);
+
+  useEffect(() => {
+    if (currentPageData.length > 0) {
+      loadReviewDataFromFirebase();
+    }
+  }, [currentPageData]);
 
   return (
     <Layout>
@@ -256,33 +348,37 @@ export default function EditVideos() {
           <button
             type="button"
             className="custom-button"
-            onClick={() =>
-              setformData([
-                ...formData,
-                {
-                  secondOfReview: "",
-                  restaurantDescription: "",
-                  googlePlaceId: "",
-                  restaurantName: "",
-                  address: "",
-                  phone: "",
-                  website: "",
-                  tripAdvisorLink: "",
-                  googleMapsLink: "",
-                  googleMapsRating: "",
-                  googleMapsReviewsCount: "",
-                  priceLevel: "",
-                  restaurantImage: "",
-                  restaurantStatus: ""
-                }
-              ])
-            }
+            onClick={() => {
+              setformData((prevFormData) => {
+                const newFormData = [
+                  ...prevFormData,
+                  {
+                    secondOfReview: "",
+                    restaurantDescription: "",
+                    googlePlaceId: "",
+                    restaurantName: "",
+                    address: "",
+                    phone: "",
+                    website: "",
+                    tripAdvisorLink: "",
+                    googleMapsLink: "",
+                    googleMapsRating: "",
+                    googleMapsReviewsCount: "",
+                    priceLevel: "",
+                    restaurantImage: "",
+                    restaurantStatus: ""
+                  }
+                ];
+                setActiveReviewIndex(newFormData.length - 1); // Set index to the newly added item
+                return newFormData;
+              });
+            }}            
           >
             + Add Another Review
           </button>
         </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6 max-w-lg mx-auto bg-white p-6 rounded-lg shadow-md">
+          <form onSubmit={handleSaveToFirebase} className="space-y-6 max-w-lg mx-auto bg-white p-6 rounded-lg shadow-md">
             <div className="form-group">
               <label htmlFor="restaurantName" className="block text-sm font-semibold mb-2">
                 Restaurant Name
@@ -292,7 +388,7 @@ export default function EditVideos() {
                   type="text"
                   id="restaurantName"
                   name="restaurantName"
-                  value={formData.restaurantName}
+                  value={formData[activeReviewIndex]?.restaurantName || ""}
                   onChange={handleInputChange}
                   className="custom-input"
                   placeholder="Enter restaurant name"
@@ -312,11 +408,15 @@ export default function EditVideos() {
                       key={index}
                       className="p-2 hover:bg-gray-100 cursor-pointer"
                       onClick={() => {
-                        setFormData((prevData) => ({
-                          ...prevData,
-                          restaurantName: place.displayName?.text || place.name?.text || "",
-                          googlePlaceId: place.id || ""
-                        }));
+                        setformData((prevList) => {
+                          const updatedList = [...prevList];
+                          updatedList[activeReviewIndex] = {
+                            ...updatedList[activeReviewIndex],
+                            restaurantName: place.displayName?.text || place.name?.text || "",
+                            googlePlaceId: place.id || ""
+                          };
+                          return updatedList;
+                        });
                         setPlaceSuggestions([]); // close dropdown after selection
                       }}                      
                     >
@@ -327,23 +427,26 @@ export default function EditVideos() {
               )}
             </div>
 
-            <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  id="restaurantName"
-                  name="restaurantName"
-                  value={formData.googlePlaceId}
-                  onChange={handleInputChange}
-                  className="custom-input"
-                  placeholder="Enter GooglePlaceId"
-                />
-                <button
-                  type="button"
-                  onClick={handlePlaceDetailsFetch}
-                  className="custom-button bg-blue-500 text-white"
-                >
-                  Fetch Details
-                </button>
+            <div className="form-group">
+              <label htmlFor="googlePlaceId" className="block text-sm font-semibold mb-2">
+                Google Place ID
+              </label>
+              <input
+                type="text"
+                id="googlePlaceId"
+                name="googlePlaceId"
+                value={formData[activeReviewIndex]?.googlePlaceId || ""}
+                onChange={handleInputChange}
+                className="custom-input"
+                placeholder="Google Place ID will autocomplete"
+              />
+              <button
+                type="button"
+                onClick={handlePlaceDetailsFetch}
+                className="custom-button bg-blue-500 text-white mt-2"
+              >
+                Fetch Details
+              </button>
             </div>
 
             <div className="form-group">
@@ -354,7 +457,7 @@ export default function EditVideos() {
                 type="text"
                 id="address"
                 name="address"
-                value={formData.address}
+                value={formData[activeReviewIndex]?.address || ""}
                 onChange={handleInputChange}
                 className="custom-input"
                 placeholder="Enter restaurant address"
@@ -369,7 +472,7 @@ export default function EditVideos() {
                 type="tel"
                 id="phone"
                 name="phone"
-                value={formData.phone}
+                value={formData[activeReviewIndex]?.phone || ""}
                 onChange={handleInputChange}
                 className="custom-input"
                 placeholder="Enter restaurant phone"
@@ -384,7 +487,7 @@ export default function EditVideos() {
                 type="url"
                 id="website"
                 name="website"
-                value={formData.website}
+                value={formData[activeReviewIndex]?.website || ""}
                 onChange={handleInputChange}
                 className="custom-input"
                 placeholder="Enter website URL"
@@ -399,7 +502,7 @@ export default function EditVideos() {
                 type="url"
                 id="tripAdvisorLink"
                 name="tripAdvisorLink"
-                value={formData.tripAdvisorLink}
+                value={formData[activeReviewIndex]?.tripAdvisorLink || ""}
                 onChange={handleInputChange}
                 className="custom-input"
                 placeholder="Enter TripAdvisor link"
@@ -414,7 +517,7 @@ export default function EditVideos() {
                 type="url"
                 id="googleMapsLink"
                 name="googleMapsLink"
-                value={formData.googleMapsLink}
+                value={formData[activeReviewIndex]?.googleMapsLink || ""}
                 onChange={handleInputChange}
                 className="custom-input"
                 placeholder="Enter Google Maps link"
@@ -429,7 +532,7 @@ export default function EditVideos() {
                 type="number"
                 id="googleMapsRating"
                 name="googleMapsRating"
-                value={formData.googleMapsRating}
+                value={formData[activeReviewIndex]?.googleMapsRating || ""}
                 onChange={handleInputChange}
                 className="custom-input"
                 placeholder="Enter Google Maps rating"
@@ -444,7 +547,7 @@ export default function EditVideos() {
                 type="number"
                 id="googleMapsReviewsCount"
                 name="googleMapsReviewsCount"
-                value={formData.googleMapsReviewsCount}
+                value={formData[activeReviewIndex]?.googleMapsReviewsCount || ""}
                 onChange={handleInputChange}
                 className="custom-input"
                 placeholder="Enter Google Maps reviews count"
@@ -459,27 +562,14 @@ export default function EditVideos() {
                 type="number"
                 id="priceLevel"
                 name="priceLevel"
-                value={formData.priceLevel}
+                value={formData[activeReviewIndex]?.priceLevel || ""}
                 onChange={handleInputChange}
                 className="custom-input"
                 placeholder="Enter price level"
               />
             </div>
 
-            <div className="form-group">
-              <label htmlFor="googleMapsLink" className="block text-sm font-semibold mb-2">
-                Google Maps Location
-              </label>
-              {formData.googleMapsLink && (
-                <iframe
-                  className="w-full h-64 rounded-lg shadow-md"
-                  src={formData.googleMapsLink}
-                  allowFullScreen
-                  loading="lazy"
-                  title="Google Maps Location"
-                ></iframe>
-              )}
-            </div>
+            <MapComponent location={formData[activeReviewIndex]?.location} />
 
             <div className="form-group">
               <label htmlFor="restaurantImage" className="block text-sm font-semibold mb-2">
@@ -489,11 +579,24 @@ export default function EditVideos() {
                 type="text"
                 id="restaurantImage"
                 name="restaurantImage"
-                value={formData.restaurantImage}
+                value={formData[activeReviewIndex]?.restaurantImage || ""}
                 onChange={handleInputChange}
                 className="custom-input"
                 placeholder="Enter restaurant image URL"
               />
+              {formData[activeReviewIndex]?.restaurantImage ? (
+                <img
+                  src={formData[activeReviewIndex]?.restaurantImage}
+                  alt="Restaurant"
+                  className="mt-4 w-full h-auto rounded-lg shadow-md"
+                  onError={(e) => {
+                    e.target.src = "/placeholder-image.jpg"; // Fallback image
+                    e.target.alt = "Placeholder Image";
+                  }}
+                />
+              ) : (
+                <p className="text-gray-500 mt-4">No image available.</p>
+              )}
             </div>
 
             <div className="form-group">
@@ -504,7 +607,7 @@ export default function EditVideos() {
                 type="text"
                 id="restaurantStatus"
                 name="restaurantStatus"
-                value={formData.restaurantStatus}
+                value={formData[activeReviewIndex]?.restaurantStatus || ""}
                 onChange={handleInputChange}
                 className="custom-input"
                 placeholder="Enter restaurant status"
@@ -519,7 +622,7 @@ export default function EditVideos() {
                 type="text"
                 id="secondOfReview"
                 name="secondOfReview"
-                value={formData.secondOfReview}
+                value={formData[activeReviewIndex]?.secondOfReview || ""}
                 onChange={handleInputChange}
                 className="custom-input"
                 placeholder="Enter second when the review begins"
@@ -533,7 +636,7 @@ export default function EditVideos() {
               <textarea
                 id="restaurantDescription"
                 name="restaurantDescription"
-                value={formData.restaurantDescription}
+                value={formData[activeReviewIndex]?.restaurantDescription || ""}
                 onChange={handleInputChange}
                 className="custom-input"
                 placeholder="Enter restaurant description"
@@ -541,8 +644,12 @@ export default function EditVideos() {
               ></textarea>
             </div>
 
-            <button type="submit" className="custom-button bg-green-500 text-white w-full py-2 rounded-lg">
-              Submit
+            <button
+              type="button"
+              className="custom-button bg-blue-500 text-white w-full py-2 rounded-lg mt-4"
+              onClick={handleSaveToFirebase}
+            >
+              Save to Firebase
             </button>
           </form>
         </div>

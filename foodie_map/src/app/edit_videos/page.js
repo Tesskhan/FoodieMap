@@ -6,7 +6,7 @@ import { searchPlaces } from "../googlePlacesService";
 import { getPlaceDetails } from "../googlePlacesService";
 
 import { db } from "../firebase";
-import { collection, getDocs, doc, updateDoc, getDoc } from "firebase/firestore";
+import { collection, getDocs, doc, updateDoc, getDoc, deleteDoc, addDoc, setDoc } from "firebase/firestore";
 import MapComponent from "../components/MapComponent";
 import "leaflet/dist/leaflet.css";
 
@@ -185,7 +185,7 @@ export default function EditVideos() {
     }
   };
 
-  const loadReviewDataFromFirebase = async (reviewIndex) => {
+  const handleRemoveVideo = async () => {
     try {
       const selectedVideoId = currentPageData[0]?.videoId; // Dynamically get the video ID from the current page data
       if (!selectedVideoId) {
@@ -194,54 +194,143 @@ export default function EditVideos() {
       }
   
       const videoRef = doc(db, "VideosToEdit", selectedVideoId);
-      const videoSnapshot = await getDoc(videoRef);
   
-      if (videoSnapshot.exists()) {
-        const videoData = videoSnapshot.data();
+      // Delete the video from Firebase
+      await deleteDoc(videoRef);
   
-        // Check if the "reviews" field exists
-        if (videoData.reviews && Array.isArray(videoData.reviews)) {
-          const reviewData = videoData.reviews[reviewIndex];
-          if (reviewData) {
-            setformData((prevFormData) => {
-              const updatedFormData = [...prevFormData];
-              updatedFormData[reviewIndex] = reviewData; // Update only the selected review
-              return updatedFormData;
-            });
-          } else {
-            console.warn(`No review found at index ${reviewIndex}.`);
-          }
-        } else {
-          console.warn("No reviews found for this video.");
-        }
+      // Remove the video from the local state
+      setVideos((prevVideos) => prevVideos.filter((video) => video.videoId !== selectedVideoId));
+  
+      // Display the next review or reset if no reviews are left
+      if (currentPageData.length > 1) {
+        setCurrentPage(0); // Reset to the first page
       } else {
-        console.warn("Video not found in Firebase.");
+        setformData([]); // Clear formData if no reviews are left
+        alert("No more reviews available.");
       }
+  
+      alert("Video removed successfully!");
     } catch (error) {
-      console.error("Error loading review data from Firebase:", error);
-      alert("Failed to load review data. Please try again.");
+      console.error("Error removing video from Firebase:", error);
+      alert("Failed to remove video. Please try again.");
+    }
+  };
+
+  const handleSaveToRestaurants = async () => {
+    try {
+      const selectedVideoId = currentPageData[0]?.videoId; // Dynamically get the video ID from the current page data
+      const selectedVideoTitle = currentPageData[0]?.title; // Get the video title
+      if (!selectedVideoId) {
+        alert("No video ID found. Please ensure a video is selected.");
+        return;
+      }
+  
+      // Prepare the restaurant data
+      const restaurantsCollectionRef = collection(db, "Restaurants");
+      for (const restaurant of formData) {
+        if (!restaurant.googlePlaceId) {
+          console.warn("Skipping restaurant without a googlePlaceId:", restaurant);
+          continue; // Skip restaurants without a googlePlaceId
+        }
+  
+        const restaurantRef = doc(restaurantsCollectionRef, restaurant.googlePlaceId);
+  
+        // Merge the video information into the restaurant document
+        await setDoc(
+          restaurantRef,
+          {
+            ...restaurant,
+            videos: {
+              [selectedVideoId]: {
+                videoId: selectedVideoId,
+                title: selectedVideoTitle,
+              },
+            },
+          },
+          { merge: true } // Merge with existing data if the document already exists
+        );
+      }
+  
+      alert("Restaurants saved successfully to Firebase!");
+    } catch (error) {
+      console.error("Error saving restaurants to Firebase:", error);
+      alert("Failed to save restaurants. Please try again.");
     }
   };
   
-  // Trigger reload when activeReviewIndex changes
   useEffect(() => {
-    if (currentPageData.length > 0 && activeReviewIndex >= 0) {
-      loadReviewDataFromFirebase(activeReviewIndex);
+    const selectedVideoId = currentPageData[0]?.videoId;
+    if (selectedVideoId) {
+      const loadFullReviewList = async () => {
+        try {
+          const videoRef = doc(db, "VideosToEdit", selectedVideoId);
+          const videoSnapshot = await getDoc(videoRef);
+  
+          if (videoSnapshot.exists()) {
+            const videoData = videoSnapshot.data();
+            if (Array.isArray(videoData.reviews) && videoData.reviews.length > 0) {
+              setformData(videoData.reviews); // Populate formData with the reviews array
+              setActiveReviewIndex(0); // Reset to the first review
+            } else {
+              console.warn("No reviews found for this video. Initializing with a default review.");
+              setformData([
+                {
+                  secondOfReview: "",
+                  restaurantDescription: "",
+                  googlePlaceId: "",
+                  restaurantName: "",
+                  address: "",
+                  phone: "",
+                  website: "",
+                  tripAdvisorLink: "",
+                  googleMapsLink: "",
+                  googleMapsRating: "",
+                  googleMapsReviewsCount: "",
+                  priceLevel: "",
+                  restaurantImage: "",
+                  restaurantStatus: ""
+                }
+              ]);
+              setActiveReviewIndex(0); // Reset to the first review
+            }
+          } else {
+            console.warn("Video not found. Initializing with a default review.");
+            setformData([
+              {
+                secondOfReview: "",
+                restaurantDescription: "",
+                googlePlaceId: "",
+                restaurantName: "",
+                address: "",
+                phone: "",
+                website: "",
+                tripAdvisorLink: "",
+                googleMapsLink: "",
+                googleMapsRating: "",
+                googleMapsReviewsCount: "",
+                priceLevel: "",
+                restaurantImage: "",
+                restaurantStatus: ""
+              }
+            ]);
+            setActiveReviewIndex(0); // Reset to the first review
+          }
+        } catch (err) {
+          console.error("Failed to load video data:", err);
+        }
+      };
+  
+      loadFullReviewList();
     }
-  }, [currentPageData, activeReviewIndex]);
-
-  useEffect(() => {
-    if (currentPageData.length > 0) {
-      loadReviewDataFromFirebase();
-    }
-  }, [currentPageData]);
+  }, [currentPageData[0]?.videoId]); // Only when video changes
+  
 
   return (
     <Layout>
       <div className="layout-container p-6">
         <h1 className="text-center text-2xl font-bold mb-6">Edit Videos</h1>
 
-        {/* Search bar */}
+        {/* Search Bar */}
         <div className="card-container">
           <input
             type="text"
@@ -257,7 +346,7 @@ export default function EditVideos() {
           )}
         </div>
 
-        {/* No results */}
+        {/* No Results */}
         {filteredVideos.length === 0 && (
           <p className="text-center text-gray-500 mt-4">No videos found.</p>
         )}
@@ -279,7 +368,7 @@ export default function EditVideos() {
           </div>
         )}
 
-        {/* Video card */}
+        {/* Video Card */}
         {currentPageData.map((video) => (
           <div key={video.id} className="reviewer-card mt-4">
             <img src={video.channelAvatar} alt="Channel avatar" />
@@ -304,10 +393,10 @@ export default function EditVideos() {
           </div>
         ))}
 
-        {/* Video embed (outside card) */}
+        {/* Video Embed */}
         {currentPageData.map((video) => (
           video.videoId && (
-            <div key={video.id} className="video-embed">
+            <div key={video.id} className="video-embed mt-6">
               <iframe
                 className="w-full"
                 style={{ aspectRatio: "16/9" }}
@@ -321,62 +410,62 @@ export default function EditVideos() {
 
         {/* Reviews Section */}
         <div className="reviews-section mt-6">
-        <h2 className="text-xl font-semibold text-center mb-6">Restaurant Details</h2>
-        <div className="flex flex-wrap gap-4 justify-center items-center mt-6">
-          <button
-            type="button"
-            className="custom-button"
-            disabled={activeReviewIndex === 0}
-            onClick={() => setActiveReviewIndex(activeReviewIndex - 1)}
-          >
-            Previous Review
-          </button>
+          <h2 className="text-xl font-semibold text-center mb-6">Restaurant Details</h2>
+          <div className="flex flex-wrap gap-4 justify-center items-center mt-6">
+            <button
+              type="button"
+              className="custom-button"
+              disabled={activeReviewIndex === 0}
+              onClick={() => setActiveReviewIndex(activeReviewIndex - 1)}
+            >
+              Previous Review
+            </button>
 
-          <span>
-            Review {activeReviewIndex + 1} of {formData.length}
-          </span>
+            <span>
+              Review {activeReviewIndex + 1} of {formData.length}
+            </span>
 
-          <button
-            type="button"
-            className="custom-button"
-            disabled={activeReviewIndex === formData.length - 1}
-            onClick={() => setActiveReviewIndex(activeReviewIndex + 1)}
-          >
-            Next Review
-          </button>
+            <button
+              type="button"
+              className="custom-button"
+              disabled={activeReviewIndex === formData.length - 1}
+              onClick={() => setActiveReviewIndex(activeReviewIndex + 1)}
+            >
+              Next Review
+            </button>
 
-          <button
-            type="button"
-            className="custom-button"
-            onClick={() => {
-              setformData((prevFormData) => {
-                const newFormData = [
-                  ...prevFormData,
-                  {
-                    secondOfReview: "",
-                    restaurantDescription: "",
-                    googlePlaceId: "",
-                    restaurantName: "",
-                    address: "",
-                    phone: "",
-                    website: "",
-                    tripAdvisorLink: "",
-                    googleMapsLink: "",
-                    googleMapsRating: "",
-                    googleMapsReviewsCount: "",
-                    priceLevel: "",
-                    restaurantImage: "",
-                    restaurantStatus: ""
-                  }
-                ];
-                setActiveReviewIndex(newFormData.length - 1); // Set index to the newly added item
-                return newFormData;
-              });
-            }}            
-          >
-            + Add Another Review
-          </button>
-        </div>
+            <button
+              type="button"
+              className="custom-button"
+              onClick={() => {
+                setformData((prevFormData) => {
+                  const newFormData = [
+                    ...prevFormData,
+                    {
+                      secondOfReview: "",
+                      restaurantDescription: "",
+                      googlePlaceId: "",
+                      restaurantName: "",
+                      address: "",
+                      phone: "",
+                      website: "",
+                      tripAdvisorLink: "",
+                      googleMapsLink: "",
+                      googleMapsRating: "",
+                      googleMapsReviewsCount: "",
+                      priceLevel: "",
+                      restaurantImage: "",
+                      restaurantStatus: ""
+                    }
+                  ];
+                  setActiveReviewIndex(newFormData.length - 1); // Set index to the newly added item
+                  return newFormData;
+                });
+              }}            
+            >
+              + Add Another Review
+            </button>
+          </div>
 
           <form onSubmit={handleSaveToFirebase} className="space-y-6 max-w-lg mx-auto bg-white p-6 rounded-lg shadow-md">
             <div className="form-group">
@@ -650,6 +739,27 @@ export default function EditVideos() {
               onClick={handleSaveToFirebase}
             >
               Save to Firebase
+            </button>
+
+            <button
+              type="button"
+              className="custom-button bg-red-500 text-white w-full py-2 rounded-lg mt-6"
+              onClick={async () => {
+                const confirmDelete = window.confirm("Are you sure you want to delete this video?");
+                if (confirmDelete) {
+                  await handleRemoveVideo();
+                }
+              }}
+            >
+              Remove Video
+            </button>
+
+            <button
+              type="button"
+              className="custom-button bg-green-500 text-white w-full py-2 rounded-lg mt-6"
+              onClick={handleSaveToRestaurants}
+            >
+              Save Restaurant to Firebase
             </button>
           </form>
         </div>

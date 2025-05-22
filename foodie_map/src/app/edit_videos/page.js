@@ -43,6 +43,10 @@ export default function EditVideos() {
           ...videoData,
           channelTitle: reviewer.channelName || "Desconocido",
           channelAvatar: reviewer.avatarUrl || "https://via.placeholder.com/48",
+          location: {
+            lat: videoData.latitude || 40.4168, // Default latitude (Madrid)
+            lng: videoData.longitude || -3.7038, // Default longitude (Madrid)
+          },
         };
       });
 
@@ -137,9 +141,13 @@ export default function EditVideos() {
           priceLevel: details.priceLevel || "",
           restaurantImage: details.photos?.[0]?.googleUrl || "",
           restaurantStatus: details.businessStatus || "",
+          location: {
+            lat: details.location?.latitude || 40.4168,
+            lng: details.location?.longitude || -3.7038,
+          }
         };
         return updatedList;
-      });
+      });      
     } catch (error) {
       console.error("Failed to get place details:", error);
       alert("Failed to retrieve place details. Check the Place ID.");
@@ -481,7 +489,7 @@ export default function EditVideos() {
               />
             </div>
 
-            <MapComponent location={formData[activeReviewIndex]?.location} />
+            <MapComponent googleLocation={formData[activeReviewIndex]?.location} name={formData[activeReviewIndex]?.name} />
 
             <div className="form-group">
               <label htmlFor="restaurantImage" className="block text-sm font-semibold mb-2">

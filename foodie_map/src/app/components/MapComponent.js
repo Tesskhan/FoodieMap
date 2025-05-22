@@ -1,27 +1,31 @@
-// MapComponent.jsx
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
+import React from "react";
+import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
+import L from "leaflet";
 
-// Fixing default icon issue
+// Fix for default marker icons in Leaflet
+import markerIcon from "leaflet/dist/images/marker-icon.png";
+import markerShadow from "leaflet/dist/images/marker-shadow.png";
+import markerRetina from "leaflet/dist/images/marker-icon-2x.png";
+
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
-  iconRetinaUrl: require('leaflet/dist/images/marker-icon-2x.png'),
-  iconUrl: require('leaflet/dist/images/marker-icon.png'),
-  shadowUrl: require('leaflet/dist/images/marker-shadow.png'),
+  iconRetinaUrl: markerRetina,
+  iconUrl: markerIcon,
+  shadowUrl: markerShadow,
 });
 
-const MapComponent = ({ location }) => {
-  if (!location || !location.lat || !location.lng) return <p>No location provided.</p>;
-
+const MapComponent = ({ location = { lat: 51.505, lng: -0.09 }, zoom = 13 }) => {
   return (
-    <MapContainer center={[location.lat, location.lng]} zoom={13} style={{ height: '300px', width: '100%' }}>
+    <MapContainer center={location} zoom={zoom} style={{ height: "400px", width: "100%" }}>
       <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a>'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
       />
-      <Marker position={[location.lat, location.lng]}>
-        <Popup>Selected Location</Popup>
+      <Marker position={location}>
+        <Popup>
+          Latitude: {location.lat}, Longitude: {location.lng}
+        </Popup>
       </Marker>
     </MapContainer>
   );

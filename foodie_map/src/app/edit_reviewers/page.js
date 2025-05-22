@@ -22,12 +22,32 @@ const DEFAULT_AVATAR = "https://th.bing.com/th/id/R.0ababdb27dd0bb71f21f03c98b6c
  * @returns {string} The extracted identifier or an empty string if not found.
  */
 const extractChannelIdentifier = (webUrl) => {
+  if (!webUrl) return "";
+
+  // Match /channel/<id>
   let match = webUrl.match(/youtube\.com\/channel\/([a-zA-Z0-9_-]+)/);
   if (match) return match[1];
+
+  // Match /@<username>
   match = webUrl.match(/youtube\.com\/@([a-zA-Z0-9_-]+)/);
   if (match) return match[1];
+
+  // Match /c/<custom-name>
   match = webUrl.match(/youtube\.com\/c\/([a-zA-Z0-9_-]+)/);
   if (match) return match[1];
+
+  // Match /user/<username>
+  match = webUrl.match(/youtube\.com\/user\/([a-zA-Z0-9_-]+)/);
+  if (match) return match[1];
+
+  // Match ?v=<video-id> or other query parameters
+  match = webUrl.match(/youtube\.com\/.*[?&]v=([a-zA-Z0-9_-]+)/);
+  if (match) return match[1];
+
+  // Match youtu.be/<video-id>
+  match = webUrl.match(/youtu\.be\/([a-zA-Z0-9_-]+)/);
+  if (match) return match[1];
+
   return "";
 };
 
@@ -137,36 +157,85 @@ export default function EditReviewers() {
    * Loads the latest videos for the new reviewer by calling the YouTube API.
    * Updates the 'lastVideoChecked' field and stores the video details in the 'VideosToEdit' Firestore collection.
    */
-  const fetchVideosForNewReviewer = async () => {
-    if (isFetchingVideos) return;
-    if (!newReviewerData.youtubeChannelId) {
-      alert("Please extract the Channel ID first.");
+  const fetchVideosFromLastChecked = async () => {
+    const { youtubeChannelId, lastVideoChecked } = newReviewerData;
+  
+    if (!youtubeChannelId) {
+      alert("Please provide a valid YouTube Channel ID.");
       return;
     }
+  
+    if (!lastVideoChecked) {
+      alert("No starting video found. Please set a starting video first.");
+      return;
+    }
+  
     setIsFetchingVideos(true);
+  
     try {
-      const videosUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${newReviewerData.youtubeChannelId}&maxResults=10&order=date&pageToken=&key=${YOUTUBE_API_KEY}`;
+      // Step 1: Get the published date of the starting video (using the /videos endpoint)
+      const detailsUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${lastVideoChecked}&key=${YOUTUBE_API_KEY}`;
+      const detailsRes = await fetch(detailsUrl);
+      const detailsData = await detailsRes.json();
+  
+      if (!detailsData.items || detailsData.items.length === 0) {
+        alert("Failed to fetch details for the starting video.");
+        return;
+      }
+  
+      const startingPublishedAt = detailsData.items[0].snippet.publishedAt;
+  
+      // Step 2: Fetch up to 10 videos that are newer than the starting video's published date.
+      const videosUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&channelId=${youtubeChannelId}&order=date&maxResults=10&publishedAfter=${startingPublishedAt}&key=${YOUTUBE_API_KEY}`;
       const videosRes = await fetch(videosUrl);
       const videosData = await videosRes.json();
-      let lastVideoChecked = "";
-      if (videosData.items && videosData.items.length > 0) {
-        const latestVideo = videosData.items[0];
-        const videoId = latestVideo.id.videoId || "";
-        // Save the videoId in lastVideoChecked
-        await setDoc(doc(db, "VideosToEdit"), {
-          channelId: newReviewerData.youtubeChannelId,
-          videoId,
-          title: latestVideo.snippet.title,
-          description: latestVideo.snippet.description,
-          publishedAt: latestVideo.snippet.publishedAt,
-        });
-        setNewReviewerData({ ...newReviewerData, lastVideoChecked: videoId });
+  
+      if (!videosData.items || videosData.items.length === 0) {
+        alert("No newer videos found.");
+        return;
       }
+  
+      // Step 3: Save all fetched videos in Firestore under "VideosToEdit"
+      const savePromises = videosData.items.map(async (video) => {
+        const videoId = video.id.videoId;
+        return setDoc(doc(db, "VideosToEdit", videoId), {
+          channelId: youtubeChannelId,
+          videoId,
+          title: video.snippet.title,
+          description: video.snippet.description,
+          publishedAt: video.snippet.publishedAt,
+        });
+      });
+      await Promise.all(savePromises);
+  
+      // Step 4: Save all fetched videos in local state
+      const videos = videosData.items.map((video) => ({
+        id: video.id.videoId,
+        title: video.snippet.title,
+        description: video.snippet.description,
+        publishedAt: video.snippet.publishedAt,
+      }));
+  
+      setNewReviewerData((prevData) => ({
+        ...prevData,
+        videos: [...(prevData.videos || []), ...videos],
+      }));
+  
+      // Step 5: Update the "lastVideoChecked" field with the newest video's ID.
+      // Since the API returns videos in descending order, the first item is the newest.
+      const newestVideoId = videosData.items[0].id.videoId;
+      setNewReviewerData((prevData) => ({
+        ...prevData,
+        lastVideoChecked: newestVideoId,
+      }));
+  
+      alert("Videos fetched and stored successfully!");
     } catch (error) {
-      console.error("Error fetching videos", error);
-      alert("Error fetching videos");
+      console.error("Error fetching videos:", error);
+      alert(`Failed to fetch videos: ${error.message}`);
+    } finally {
+      setIsFetchingVideos(false);
     }
-    setIsFetchingVideos(false);
   };
 
   /**
@@ -599,11 +668,6 @@ export default function EditReviewers() {
             <div className="p-6 border rounded-lg shadow-md bg-white w-full">
               <h2 className="text-xl font-bold mb-4">Create New Reviewer</h2>
               <div className="space-y-4">
-                {/* New Reviewer Avatar URL */}
-                <div className="flex flex-col items-center justify-center">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Avatar URL
-                  </label>
                   <img
                     src={newReviewerData.avatarUrl || DEFAULT_AVATAR}
                     alt="Avatar Preview"
@@ -614,19 +678,8 @@ export default function EditReviewers() {
                       e.target.src = DEFAULT_AVATAR;
                     }}
                   />
-                  <input
-                    type="text"
-                    value={newReviewerData.avatarUrl}
-                    onChange={(e) =>
-                      setNewReviewerData({
-                        ...newReviewerData,
-                        avatarUrl: e.target.value,
-                      })
-                    }
-                    className="custom-input"
-                  />
-                </div>
-                {/* New Reviewer Channel Name */}
+
+                  {/* New Reviewer Channel Name */}
                 <div className="flex flex-col items-center justify-center">
                   <label className="block text-sm font-medium text-gray-700">
                     Channel Name
@@ -638,6 +691,23 @@ export default function EditReviewers() {
                       setNewReviewerData({
                         ...newReviewerData,
                         channelName: e.target.value,
+                      })
+                    }
+                    className="custom-input"
+                  />
+                </div>
+                {/* New Reviewer Avatar URL */}
+                <div className="flex flex-col items-center justify-center">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Avatar URL
+                  </label>
+                  <input
+                    type="text"
+                    value={newReviewerData.avatarUrl}
+                    onChange={(e) =>
+                      setNewReviewerData({
+                        ...newReviewerData,
+                        avatarUrl: e.target.value,
                       })
                     }
                     className="custom-input"
@@ -662,25 +732,22 @@ export default function EditReviewers() {
                   </button>
                 </div>
                 {/* New Reviewer Channel ID and Fetch Videos Button */}
-                <div className="flex flex-col items-center justify-center">
+                <div className="flex flex-col items-center justify-center mt-4">
                   <label className="block text-sm font-medium text-gray-700">
-                    Channel ID
+                    YouTube Channel ID
                   </label>
-                  <div className="flex items-center">
-                    <input
-                      type="text"
-                      value={newReviewerData.youtubeChannelId}
-                      disabled
-                      className="custom-input"
-                    />
-                    <button
-                      onClick={fetchVideosForNewReviewer}
-                      className="ml-2 custom-button bg-gray-200 hover:bg-gray-300 text-sm px-2 py-1"
-                      disabled={isFetchingVideos}
-                    >
-                      {isFetchingVideos ? "Fetching..." : "Fetch Videos"}
-                    </button>
-                  </div>
+                  <input
+                    type="text"
+                    value={newReviewerData.youtubeChannelId || ""}
+                    onChange={(e) =>
+                      setNewReviewerData((prevData) => ({
+                        ...prevData,
+                        youtubeChannelId: e.target.value,
+                      }))
+                    }
+                    className="custom-input"
+                    placeholder="Enter YouTube Channel ID"
+                  />
                 </div>
               </div>
               {/* New Reviewer Last Video Checked */}
@@ -690,10 +757,22 @@ export default function EditReviewers() {
                 </label>
                 <input
                   type="text"
-                  value={newReviewerData.lastVideoChecked}
-                  disabled
+                  value={newReviewerData.lastVideoChecked || ""}
+                  onChange={(e) =>
+                    setNewReviewerData((prevData) => ({
+                      ...prevData,
+                      lastVideoChecked: e.target.value,
+                    }))
+                  }
                   className="custom-input"
+                  placeholder="Enter last video checked"
                 />
+                <button
+                  onClick={() => fetchVideosFromLastChecked()}
+                  className="custom-button bg-blue-500 text-white"
+                >
+                  Fetch Videos
+                </button>
               </div>
               {/* Create/Cancel Buttons */}
               <div className="flex space-x-3 mt-4 justify-center">
